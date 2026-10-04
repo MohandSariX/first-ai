@@ -1,4 +1,4 @@
-import { index, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, pgTable, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
 
 import { userRoleEnum } from "./enums.js";
 import { organizations } from "./organizations.js";
@@ -29,5 +29,6 @@ export const users = pgTable(
   (table) => [
     index("users_organization_id_idx").on(table.organizationId),
     index("users_email_idx").on(table.email),
+    unique("users_id_organization_id_unique").on(table.id, table.organizationId),
   ],
 );

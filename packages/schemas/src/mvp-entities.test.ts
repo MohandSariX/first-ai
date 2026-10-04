@@ -10,6 +10,11 @@ import {
   CUSTOMER_STATUSES,
   CUSTOMER_TYPES,
   USER_ROLES,
+  LEAD_SOURCES,
+  LEAD_STATUSES,
+  PRICING_MODES,
+  createLeadSchema,
+  createServiceSchema,
 } from "./mvp-entities.js";
 
 const organizationId = "ca9cfcfd-bdec-4bbf-a71d-2c0b39250ac2";
@@ -27,6 +32,9 @@ describe("MVP entity schemas", () => {
       "prospect",
     ]);
     expect(CUSTOMER_RISK_LEVELS).toContain("critical");
+    expect(LEAD_STATUSES).toContain("qualified");
+    expect(LEAD_SOURCES).toContain("referral");
+    expect(PRICING_MODES).toContain("subscription");
   });
 
   it("validates focused organization and user inputs", () => {
@@ -85,5 +93,12 @@ describe("MVP entity schemas", () => {
         city: "Paris",
       }).success,
     ).toBe(true);
+  });
+
+  it("validates bounded lead scores and decimal money strings", () => {
+    expect(createLeadSchema.safeParse({ companyName: "Fictional Lead", score: 100, estimatedValue: "1250.50" }).success).toBe(true);
+    expect(createLeadSchema.safeParse({ companyName: "Fictional Lead", score: 101 }).success).toBe(false);
+    expect(createServiceSchema.safeParse({ code: "DERAT", name: "Dératisation", pricingMode: "fixed", basePrice: "125.50" }).success).toBe(true);
+    expect(createServiceSchema.safeParse({ code: "DERAT", name: "Dératisation", pricingMode: "fixed", basePrice: "12.345" }).success).toBe(false);
   });
 });

@@ -16,6 +16,10 @@ const contactAId = randomUUID();
 const contactBId = randomUUID();
 const customerSiteAId = randomUUID();
 const customerSiteBId = randomUUID();
+const leadAId = randomUUID();
+const leadBId = randomUUID();
+const serviceAId = randomUUID();
+const serviceBId = randomUUID();
 const testRunId = randomUUID();
 const emailA = `user-a-${testRunId}@example.test`;
 const emailB = `user-b-${testRunId}@example.test`;
@@ -61,7 +65,7 @@ async function requireSuccessfulOperation(
 
 async function visibleIds(
   client: SupabaseClient,
-  table: "organizations" | "users" | "customers" | "contacts" | "customer_sites",
+  table: "organizations" | "users" | "customers" | "contacts" | "customer_sites" | "leads" | "services",
 ): Promise<string[]> {
   const { data, error } = await client.from(table).select("id").order("id");
   if (error !== null) {
@@ -192,6 +196,18 @@ describe("local Supabase auth and tenant isolation", () => {
         },
       ]),
     );
+    await requireSuccessfulOperation(
+      adminClient.from("leads").insert([
+        { id: leadAId, organization_id: organizationAId, company_name: "Fictional Lead A", assigned_user_id: businessUserAId },
+        { id: leadBId, organization_id: organizationBId, company_name: "Fictional Lead B", assigned_user_id: businessUserBId },
+      ]),
+    );
+    await requireSuccessfulOperation(
+      adminClient.from("services").insert([
+        { id: serviceAId, organization_id: organizationAId, code: "DERAT", name: "Fictional Service A", pricing_mode: "fixed" },
+        { id: serviceBId, organization_id: organizationBId, code: "DERAT", name: "Fictional Service B", pricing_mode: "fixed" },
+      ]),
+    );
 
     userAClient = createClient(supabaseUrl, publishableKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -217,6 +233,9 @@ describe("local Supabase auth and tenant isolation", () => {
     if (adminClient === undefined) {
       return;
     }
+
+    await requireSuccessfulOperation(adminClient.from("leads").delete().in("id", [leadAId, leadBId]));
+    await requireSuccessfulOperation(adminClient.from("services").delete().in("id", [serviceAId, serviceBId]));
 
     await requireSuccessfulOperation(
       adminClient
@@ -294,6 +313,8 @@ describe("local Supabase auth and tenant isolation", () => {
     await expect(visibleIds(userAClient, "customer_sites")).resolves.toEqual([
       customerSiteAId,
     ]);
+    await expect(visibleIds(userAClient, "leads")).resolves.toEqual([leadAId]);
+    await expect(visibleIds(userAClient, "services")).resolves.toEqual([serviceAId]);
 
     await expect(visibleIds(userBClient, "organizations")).resolves.toEqual([
       organizationBId,
@@ -310,6 +331,8 @@ describe("local Supabase auth and tenant isolation", () => {
     await expect(visibleIds(userBClient, "customer_sites")).resolves.toEqual([
       customerSiteBId,
     ]);
+    await expect(visibleIds(userBClient, "leads")).resolves.toEqual([leadBId]);
+    await expect(visibleIds(userBClient, "services")).resolves.toEqual([serviceBId]);
   });
 
   it("blocks direct-ID attacks across tenant boundaries", async () => {
@@ -317,6 +340,8 @@ describe("local Supabase auth and tenant isolation", () => {
       ["customers", customerBId],
       ["contacts", contactBId],
       ["customer_sites", customerSiteBId],
+      ["leads", leadBId],
+      ["services", serviceBId],
     ] as const) {
       const { data, error } = await userAClient
         .from(table)
@@ -331,6 +356,8 @@ describe("local Supabase auth and tenant isolation", () => {
       ["customers", customerAId],
       ["contacts", contactAId],
       ["customer_sites", customerSiteAId],
+      ["leads", leadAId],
+      ["services", serviceAId],
     ] as const) {
       const { data, error } = await userBClient
         .from(table)
@@ -345,6 +372,8 @@ describe("local Supabase auth and tenant isolation", () => {
   it("blocks anonymous business-data reads", async () => {
     await expect(visibleIds(anonymousClient, "customers")).resolves.toEqual([]);
     await expect(visibleIds(anonymousClient, "users")).resolves.toEqual([]);
+    await expect(visibleIds(anonymousClient, "leads")).resolves.toEqual([]);
+    await expect(visibleIds(anonymousClient, "services")).resolves.toEqual([]);
   });
 
   it("allows the server-only service role to confirm both tenants exist", async () => {
@@ -390,5 +419,17 @@ describe("local Supabase auth and tenant isolation", () => {
         city: "Toulouse",
       });
     expect(invalidPrimaryContact.error?.code).toBe("23503");
+
+    const invalidLead = await adminClient!.from("leads").insert({
+      id: randomUUID(), organization_id: organizationAId, company_name: "Invalid Lead", assigned_user_id: businessUserBId,
+    });
+    expect(invalidLead.error?.code).toBe("23503");
+  });
+
+  it("enforces service-code uniqueness per organization", async () => {
+    const duplicate = await adminClient!.from("services").insert({
+      id: randomUUID(), organization_id: organizationAId, code: "DERAT", name: "Duplicate", pricing_mode: "fixed",
+    });
+    expect(duplicate.error?.code).toBe("23505");
   });
 });

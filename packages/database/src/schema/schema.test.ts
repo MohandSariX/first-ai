@@ -5,24 +5,30 @@ import {
   contacts,
   customerSites,
   customers,
+  leads,
   organizations,
+  services,
   users,
 } from "./index.js";
 
 describe("database schema exports", () => {
-  it("exports exactly the requested MVP tables", () => {
+  it("exports the current application tables", () => {
     expect([
       getTableName(organizations),
       getTableName(users),
       getTableName(customers),
       getTableName(contacts),
       getTableName(customerSites),
+      getTableName(leads),
+      getTableName(services),
     ]).toEqual([
       "organizations",
       "users",
       "customers",
       "contacts",
       "customer_sites",
+      "leads",
+      "services",
     ]);
   });
 
@@ -31,5 +37,7 @@ describe("database schema exports", () => {
     expect(customers.organizationId.notNull).toBe(true);
     expect(contacts.organizationId.notNull).toBe(true);
     expect(customerSites.organizationId.notNull).toBe(true);
+    expect(leads.organizationId.notNull).toBe(true);
+    expect(services.organizationId.notNull).toBe(true);
   });
 });

@@ -8,7 +8,9 @@ const expectedTables = [
   "contacts",
   "customer_sites",
   "customers",
+  "leads",
   "organizations",
+  "services",
   "users",
 ];
 
@@ -16,6 +18,9 @@ const expectedEnums = [
   "customer_risk_level",
   "customer_status",
   "customer_type",
+  "lead_source",
+  "lead_status",
+  "pricing_mode",
   "user_role",
 ];
 
@@ -27,6 +32,9 @@ const expectedForeignKeys = [
   ["customer_sites", "primary_contact_id", "contacts", "id"],
   ["customers", "organization_id", "organizations", "id"],
   ["users", "organization_id", "organizations", "id"],
+  ["leads", "organization_id", "organizations", "id"],
+  ["leads", "assigned_user_id", "users", "id"],
+  ["services", "organization_id", "organizations", "id"],
 ];
 
 describe("local Supabase database schema", () => {
@@ -127,7 +135,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 3 }]);
+    expect(result).toEqual([{ migrationCount: 4 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {
@@ -139,24 +147,26 @@ describe("local Supabase database schema", () => {
       from pg_class
       join pg_namespace on pg_namespace.oid = pg_class.relnamespace
       where pg_namespace.nspname = 'public'
-        and relname in ('organizations', 'users', 'customers', 'contacts', 'customer_sites')
+        and relname in ('organizations', 'users', 'customers', 'contacts', 'customer_sites', 'leads', 'services')
       order by relname
     `);
-    expect(tables).toHaveLength(5);
+    expect(tables).toHaveLength(7);
     expect(tables.every((table) => table.rowSecurityEnabled)).toBe(true);
 
     const policies = await database.execute<{ policyName: string }>(sql`
       select policyname as "policyName"
       from pg_policies
       where schemaname = 'public'
-        and tablename in ('organizations', 'users', 'customers', 'contacts', 'customer_sites')
+        and tablename in ('organizations', 'users', 'customers', 'contacts', 'customer_sites', 'leads', 'services')
       order by policyname
     `);
     expect(policies.map((policy) => policy.policyName)).toEqual([
       "contacts_select_own_organization",
       "customer_sites_select_own_organization",
       "customers_select_own_organization",
+      "leads_select_own_organization",
       "organizations_select_own",
+      "services_select_own_organization",
       "users_select_own_organization",
     ]);
   });

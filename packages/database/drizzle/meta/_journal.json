@@ -22,6 +22,13 @@
       "when": 1791127631911,
       "tag": "0002_restrict_tenant_helper",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791128240942,
+      "tag": "0003_chunky_azazel",
+      "breakpoints": true
     }
   ]
 }
