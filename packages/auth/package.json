@@ -1,1 +1,34 @@
-{"name":"@first-ai/auth","version":"0.0.0","private":true,"type":"module","exports":"./src/index.ts","scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc --noEmit"},"devDependencies":{"typescript":"^5.9.0"}}
+{
+  "name": "@first-ai/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./server": "./src/server.ts",
+    "./admin": "./src/admin.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src vitest.config.ts vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:integration": "dotenv -e ../../.env.local -- vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@first-ai/schemas": "workspace:*",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "2.100.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "^20.19.0",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "9.39.5",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}

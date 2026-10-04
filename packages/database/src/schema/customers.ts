@@ -1,4 +1,13 @@
-import { index, integer, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 import {
   customerRiskLevelEnum,
@@ -41,5 +50,9 @@ export const customers = pgTable(
     index("customers_siret_idx").on(table.siret),
     index("customers_status_idx").on(table.status),
     index("customers_type_idx").on(table.type),
+    unique("customers_id_organization_id_unique").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );

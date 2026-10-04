@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@first-ai/schemas": "workspace:*",
-    "@supabase/supabase-js": "^2.0.0",
+    "@supabase/supabase-js": "2.100.0",
     "drizzle-orm": "^0.44.0",
     "postgres": "^3.4.0"
   },

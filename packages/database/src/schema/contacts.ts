@@ -1,9 +1,11 @@
 import {
   boolean,
+  foreignKey,
   index,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -18,9 +20,7 @@ export const contacts = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    customerId: uuid("customer_id")
-      .notNull()
-      .references(() => customers.id),
+    customerId: uuid("customer_id").notNull(),
     firstName: varchar("first_name", { length: 120 }).notNull(),
     lastName: varchar("last_name", { length: 120 }).notNull(),
     role: varchar("role", { length: 120 }),
@@ -40,5 +40,14 @@ export const contacts = pgTable(
     index("contacts_customer_id_idx").on(table.customerId),
     index("contacts_email_idx").on(table.email),
     index("contacts_phone_idx").on(table.phone),
+    unique("contacts_id_organization_id_unique").on(
+      table.id,
+      table.organizationId,
+    ),
+    foreignKey({
+      name: "contacts_customer_organization_fk",
+      columns: [table.customerId, table.organizationId],
+      foreignColumns: [customers.id, customers.organizationId],
+    }),
   ],
 );

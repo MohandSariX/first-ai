@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   numeric,
   pgTable,
@@ -19,9 +20,7 @@ export const customerSites = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    customerId: uuid("customer_id")
-      .notNull()
-      .references(() => customers.id),
+    customerId: uuid("customer_id").notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     addressLine1: varchar("address_line1", { length: 255 }).notNull(),
     addressLine2: varchar("address_line2", { length: 255 }),
@@ -32,9 +31,7 @@ export const customerSites = pgTable(
     longitude: numeric("longitude", { precision: 9, scale: 6 }),
     accessInstructions: text("access_instructions"),
     accessHours: text("access_hours"),
-    primaryContactId: uuid("primary_contact_id").references(
-      () => contacts.id,
-    ),
+    primaryContactId: uuid("primary_contact_id"),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -48,5 +45,15 @@ export const customerSites = pgTable(
     index("customer_sites_customer_id_idx").on(table.customerId),
     index("customer_sites_postal_code_idx").on(table.postalCode),
     index("customer_sites_city_idx").on(table.city),
+    foreignKey({
+      name: "customer_sites_customer_organization_fk",
+      columns: [table.customerId, table.organizationId],
+      foreignColumns: [customers.id, customers.organizationId],
+    }),
+    foreignKey({
+      name: "customer_sites_primary_contact_organization_fk",
+      columns: [table.primaryContactId, table.organizationId],
+      foreignColumns: [contacts.id, contacts.organizationId],
+    }),
   ],
 );

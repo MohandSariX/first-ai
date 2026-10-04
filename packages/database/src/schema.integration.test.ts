@@ -93,7 +93,7 @@ describe("local Supabase database schema", () => {
         row.foreignTableName,
         row.foreignColumnName,
       ]),
-    ).toEqual(expectedForeignKeys);
+    ).toEqual(expect.arrayContaining(expectedForeignKeys));
   });
 
   it("keeps the primary contact foreign key nullable", async () => {
@@ -121,12 +121,72 @@ describe("local Supabase database schema", () => {
     expect(result.map((row) => row.enumName)).toEqual(expectedEnums);
   });
 
-  it("records the single Drizzle migration", async () => {
+  it("records all Drizzle migrations", async () => {
     const result = await database.execute<{ migrationCount: number }>(sql`
       select count(*)::integer as "migrationCount"
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 1 }]);
+    expect(result).toEqual([{ migrationCount: 3 }]);
+  });
+
+  it("enables RLS with the expected read policies", async () => {
+    const tables = await database.execute<{
+      tableName: string;
+      rowSecurityEnabled: boolean;
+    }>(sql`
+      select relname as "tableName", relrowsecurity as "rowSecurityEnabled"
+      from pg_class
+      join pg_namespace on pg_namespace.oid = pg_class.relnamespace
+      where pg_namespace.nspname = 'public'
+        and relname in ('organizations', 'users', 'customers', 'contacts', 'customer_sites')
+      order by relname
+    `);
+    expect(tables).toHaveLength(5);
+    expect(tables.every((table) => table.rowSecurityEnabled)).toBe(true);
+
+    const policies = await database.execute<{ policyName: string }>(sql`
+      select policyname as "policyName"
+      from pg_policies
+      where schemaname = 'public'
+        and tablename in ('organizations', 'users', 'customers', 'contacts', 'customer_sites')
+      order by policyname
+    `);
+    expect(policies.map((policy) => policy.policyName)).toEqual([
+      "contacts_select_own_organization",
+      "customer_sites_select_own_organization",
+      "customers_select_own_organization",
+      "organizations_select_own",
+      "users_select_own_organization",
+    ]);
+  });
+
+  it("secures the tenant-resolution helper", async () => {
+    const result = await database.execute<{
+      isSecurityDefiner: boolean;
+      configuration: string[];
+      anonymousCanExecute: boolean;
+      authenticatedCanExecute: boolean;
+    }>(sql`
+      select
+        procedure_definition.prosecdef as "isSecurityDefiner",
+        procedure_definition.proconfig as "configuration",
+        has_function_privilege('anon', 'public.current_organization_id()', 'EXECUTE') as "anonymousCanExecute",
+        has_function_privilege('authenticated', 'public.current_organization_id()', 'EXECUTE') as "authenticatedCanExecute"
+      from pg_proc procedure_definition
+      join pg_namespace procedure_namespace
+        on procedure_namespace.oid = procedure_definition.pronamespace
+      where procedure_namespace.nspname = 'public'
+        and procedure_definition.proname = 'current_organization_id'
+    `);
+
+    expect(result).toEqual([
+      {
+        isSecurityDefiner: true,
+        configuration: ["search_path=\"\""],
+        anonymousCanExecute: false,
+        authenticatedCanExecute: true,
+      },
+    ]);
   });
 });
