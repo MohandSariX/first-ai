@@ -14,18 +14,20 @@ import {
   CustomerService,
   CustomerSiteService,
   LeadService,
+  LeadSummaryService,
   ServiceCatalogService,
 } from "@first-ai/tools";
 
 import { requireBusinessUser } from "./auth";
+import type { CurrentBusinessUser } from "@first-ai/auth";
 
 export async function withCrm<T>(operation: (crm: Awaited<ReturnType<typeof createCrm>>) => Promise<T>): Promise<T> {
   const crm = await createCrm();
   try { return await operation(crm); } finally { await crm.database.$client.end(); }
 }
 
-async function createCrm() {
-  const context = await requireBusinessUser();
+export async function createCrm(providedContext?: CurrentBusinessUser) {
+  const context = providedContext ?? await requireBusinessUser();
   const database = createDatabaseClient();
   const customersRepository = new CustomerRepository(database);
   const contactsRepository = new ContactRepository(database);
@@ -41,5 +43,6 @@ async function createCrm() {
     leads: new LeadService(leadsRepository),
     catalog: new ServiceCatalogService(servicesRepository),
     dashboard: new CrmDashboardService(customersRepository, leadsRepository, servicesRepository),
+    leadSummary: new LeadSummaryService(leadsRepository),
   };
 }

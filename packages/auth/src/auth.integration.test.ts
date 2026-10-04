@@ -20,6 +20,14 @@ const leadAId = randomUUID();
 const leadBId = randomUUID();
 const serviceAId = randomUUID();
 const serviceBId = randomUUID();
+const agentAId = randomUUID();
+const agentBId = randomUUID();
+const globalAgentId = randomUUID();
+const runAId = randomUUID();
+const runBId = randomUUID();
+const otherUserRunId = randomUUID();
+const callAId = randomUUID();
+const callBId = randomUUID();
 const testRunId = randomUUID();
 const emailA = `user-a-${testRunId}@example.test`;
 const emailB = `user-b-${testRunId}@example.test`;
@@ -65,7 +73,7 @@ async function requireSuccessfulOperation(
 
 async function visibleIds(
   client: SupabaseClient,
-  table: "organizations" | "users" | "customers" | "contacts" | "customer_sites" | "leads" | "services",
+  table: "organizations" | "users" | "customers" | "contacts" | "customer_sites" | "leads" | "services" | "agents" | "agent_runs" | "agent_tool_calls",
 ): Promise<string[]> {
   const { data, error } = await client.from(table).select("id").order("id");
   if (error !== null) {
@@ -209,6 +217,24 @@ describe("local Supabase auth and tenant isolation", () => {
       ]),
     );
 
+    await requireSuccessfulOperation(adminClient.from("agents").insert([
+      { id: agentAId, organization_id: organizationAId, code: "director", name: "Director", version: "v1" },
+      { id: agentBId, organization_id: organizationBId, code: "director", name: "Director", version: "v1" },
+      { id: globalAgentId, code: "global-test", name: "Hidden global test", version: "v1" },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("agent_runs").insert([
+      { id: runAId, organization_id: organizationAId, agent_id: agentAId, triggered_by_type: "user", triggered_by_id: businessUserAId, objective: "Fictional CRM request A", model_name: "mock", correlation_id: randomUUID() },
+      { id: runBId, organization_id: organizationBId, agent_id: agentBId, triggered_by_type: "user", triggered_by_id: businessUserBId, objective: "Fictional CRM request B", model_name: "mock", correlation_id: randomUUID() },
+      { id: otherUserRunId, organization_id: organizationAId, agent_id: agentAId, triggered_by_type: "user", triggered_by_id: randomUUID(), objective: "Other user hidden trace", model_name: "mock", correlation_id: randomUUID() },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("agent_tool_calls").insert([
+      { id: callAId, organization_id: organizationAId, agent_run_id: runAId, agent_id: agentAId, tool_name: "customers.get", risk_level: 0 },
+      { id: callBId, organization_id: organizationBId, agent_run_id: runBId, agent_id: agentBId, tool_name: "customers.get", risk_level: 0 },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("ai_settings").insert([
+      { organization_id: organizationAId }, { organization_id: organizationBId },
+    ]));
+
     userAClient = createClient(supabaseUrl, publishableKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -234,6 +260,10 @@ describe("local Supabase auth and tenant isolation", () => {
       return;
     }
 
+    await requireSuccessfulOperation(adminClient.from("agent_tool_calls").delete().in("id", [callAId, callBId]));
+    await requireSuccessfulOperation(adminClient.from("ai_settings").delete().in("organization_id", [organizationAId, organizationBId]));
+    await requireSuccessfulOperation(adminClient.from("agent_runs").delete().in("id", [runAId, runBId, otherUserRunId]));
+    await requireSuccessfulOperation(adminClient.from("agents").delete().in("id", [agentAId, agentBId, globalAgentId]));
     await requireSuccessfulOperation(adminClient.from("leads").delete().in("id", [leadAId, leadBId]));
     await requireSuccessfulOperation(adminClient.from("services").delete().in("id", [serviceAId, serviceBId]));
 
@@ -295,6 +325,24 @@ describe("local Supabase auth and tenant isolation", () => {
       organizationId: organizationBId,
       role: "OWNER",
     });
+  });
+
+  it("isolates runtime settings reads and writes even by known organization UUID", async () => {
+    for (const [client, own, foreign] of [[userAClient, organizationAId, organizationBId], [userBClient, organizationBId, organizationAId]] as const) {
+      const list = await client.from("ai_settings").select("organization_id");
+      expect(list.error).toBeNull(); expect(list.data).toEqual([{ organization_id: own }]);
+      const attack = await client.from("ai_settings").update({ local_standard_model: "malicious-change" }).eq("organization_id", foreign).select();
+      expect(attack.error).toBeNull(); expect(attack.data).toEqual([]);
+      const ownUpdate = await client.from("ai_settings").update({ local_standard_model: "qwen3:14b" }).eq("organization_id", own).select("local_standard_model");
+      expect(ownUpdate.error).toBeNull(); expect(ownUpdate.data).toEqual([{ local_standard_model: "qwen3:14b" }]);
+    }
+    const anonymous = await anonymousClient.from("ai_settings").select("organization_id");
+    expect(anonymous.error).toBeNull(); expect(anonymous.data).toEqual([]);
+    await requireSuccessfulOperation(adminClient!.from("users").update({ role: "MANAGER" }).eq("id", businessUserAId));
+    try {
+      const denied = await userAClient.from("ai_settings").update({ mode: "CLOUD_ONLY" }).eq("organization_id", organizationAId).select();
+      expect(denied.error).toBeNull(); expect(denied.data).toEqual([]);
+    } finally { await requireSuccessfulOperation(adminClient!.from("users").update({ role: "OWNER" }).eq("id", businessUserAId)); }
   });
 
   it("isolates all tenant-owned reads symmetrically", async () => {
@@ -431,5 +479,47 @@ describe("local Supabase auth and tenant isolation", () => {
       id: randomUUID(), organization_id: organizationAId, code: "DERAT", name: "Duplicate", pricing_mode: "fixed",
     });
     expect(duplicate.error?.code).toBe("23505");
+  });
+
+  it("isolates agent definitions, runs and tool calls, including exact UUIDs", async () => {
+    for (const [client, ownAgent, ownRun, ownCall, foreignRun, foreignCall] of [
+      [userAClient, agentAId, runAId, callAId, runBId, callBId],
+      [userBClient, agentBId, runBId, callBId, runAId, callAId],
+    ] as const) {
+      await expect(visibleIds(client, "agents")).resolves.toEqual([ownAgent]);
+      await expect(visibleIds(client, "agent_runs")).resolves.toEqual([ownRun]);
+      await expect(visibleIds(client, "agent_tool_calls")).resolves.toEqual([ownCall]);
+      for (const [table, id] of [["agent_runs", foreignRun], ["agent_tool_calls", foreignCall], ["agents", globalAgentId]] as const) {
+        const result = await client.from(table).select("id").eq("id", id).maybeSingle();
+        expect(result.error).toBeNull(); expect(result.data).toBeNull();
+      }
+    }
+    for (const table of ["agents", "agent_runs", "agent_tool_calls"] as const) {
+      await expect(visibleIds(anonymousClient, table)).resolves.toEqual([]);
+    }
+    await expect(visibleIds(adminClient!, "agent_runs")).resolves.toEqual(expect.arrayContaining([runAId, runBId, otherUserRunId]));
+    await expect(visibleIds(adminClient!, "agent_tool_calls")).resolves.toEqual(expect.arrayContaining([callAId, callBId]));
+  });
+
+  it("rejects cross-tenant agent/run/call relationships and authenticated writes", async () => {
+    const invalidRun = await adminClient!.from("agent_runs").insert({
+      organization_id: organizationAId, agent_id: agentBId, triggered_by_type: "user", triggered_by_id: businessUserAId,
+      objective: "Invalid test run", model_name: "mock", correlation_id: randomUUID(),
+    });
+    expect(invalidRun.error?.code).toBe("23503");
+    const invalidParent = await adminClient!.from("agent_runs").insert({
+      organization_id: organizationAId, agent_id: agentAId, parent_run_id: runBId,
+      triggered_by_type: "user", triggered_by_id: businessUserAId, objective: "Invalid parent",
+      model_name: "mock", correlation_id: randomUUID(),
+    });
+    expect(invalidParent.error?.code).toBe("23503");
+    const invalidCall = await adminClient!.from("agent_tool_calls").insert({
+      organization_id: organizationAId, agent_run_id: runBId, agent_id: agentAId, tool_name: "customers.get", risk_level: 0,
+    });
+    expect(invalidCall.error?.code).toBe("23503");
+    const userWrite = await userAClient.from("agent_tool_calls").insert({
+      organization_id: organizationAId, agent_run_id: runAId, agent_id: agentAId, tool_name: "customers.get", risk_level: 0,
+    });
+    expect(userWrite.error?.code).toBe("42501");
   });
 });

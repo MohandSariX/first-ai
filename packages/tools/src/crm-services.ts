@@ -101,6 +101,15 @@ export class CrmDashboardService {
     ]);
     return { activeCustomers, openLeads, activeServices, recentLeads };
   }
+  async countActiveCustomers(context: CurrentBusinessUser) { authorize(context, "customers.read"); return this.customers.countActive(context.organizationId); }
+  async countOpenLeads(context: CurrentBusinessUser) { authorize(context, "leads.read"); return this.leads.countOpen(context.organizationId); }
+  async recentNewLeads(context: CurrentBusinessUser) { authorize(context, "leads.read"); return this.leads.recentNew(context.organizationId, 5); }
+  async countActiveServices(context: CurrentBusinessUser) { authorize(context, "services.read"); return this.catalog.countActive(context.organizationId); }
+}
+
+export class LeadSummaryService {
+  constructor(private readonly repository: Pick<LeadRepository, "countNew">) {}
+  async countNew(context: CurrentBusinessUser) { authorize(context, "leads.read"); return this.repository.countNew(context.organizationId); }
 }
 
 export class ServiceCatalogService {

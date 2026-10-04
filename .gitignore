@@ -34,3 +34,8 @@ pnpm-debug.log*
 .DS_Store
 .AppleDouble
 .LSOverride
+.next-e2e/
+
+# Local AI model caches/binaries never belong in the repository
+.ollama/
+*.gguf

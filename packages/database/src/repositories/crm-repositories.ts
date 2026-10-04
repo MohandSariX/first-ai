@@ -80,6 +80,10 @@ export class CustomerSiteRepository {
 }
 
 export class LeadRepository {
+  async countNew(organizationId: string): Promise<number> {
+    const [result] = await this.db.select({ value: count() }).from(leads).where(and(eq(leads.organizationId, organizationId), eq(leads.status, "new"), isNull(leads.deletedAt)));
+    return result?.value ?? 0;
+  }
   constructor(private readonly db: Database) {}
   async get(input: { organizationId: string; leadId: string }): Promise<Lead | undefined> { return this.db.query.leads.findFirst({ where: and(eq(leads.organizationId, input.organizationId), eq(leads.id, input.leadId), isNull(leads.deletedAt)) }); }
   async search(input: SearchPage & { organizationId: string; status?: Lead["status"] }): Promise<Lead[]> { const q = input.query?.trim() ?? ""; const conditions = terms([eq(leads.organizationId, input.organizationId), isNull(leads.deletedAt)], input.query, [ilike(leads.companyName, `%${q}%`), ilike(leads.firstName, `%${q}%`), ilike(leads.lastName, `%${q}%`), ilike(leads.email, `%${q}%`), ilike(leads.phone, `%${q}%`)]); if (input.status !== undefined) conditions.push(eq(leads.status, input.status)); return this.db.select().from(leads).where(and(...conditions)).limit(pageLimit(input.limit)).offset(input.offset).orderBy(leads.createdAt); }

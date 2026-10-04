@@ -14,3 +14,5 @@ export { leads } from "./leads.js";
 export { organizations } from "./organizations.js";
 export { services } from "./services.js";
 export { users } from "./users.js";
+export * from "./agent-observability.js";
+export { aiSettings } from "./ai-settings.js";

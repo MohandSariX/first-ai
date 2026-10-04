@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+export { SafeMarkdown } from "./safe-markdown.js";
 
 function join(...classes: Array<string | false | undefined>): string {
   return classes.filter(Boolean).join(" ");

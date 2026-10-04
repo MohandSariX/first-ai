@@ -1,6 +1,7 @@
 import { hasPermission, type Permission, type UserRole } from "@first-ai/auth";
 
 export const navigationItems = [
+  { href: "/assistant", label: "Assistant", short: "Assistant", icon: "✧", permission: "customers.read" },
   { href: "/dashboard", label: "Tableau de bord", short: "Accueil", icon: "⌂", permission: "customers.read" },
   { href: "/customers", label: "Clients", short: "Clients", icon: "◎", permission: "customers.read" },
   { href: "/leads", label: "Prospects", short: "Prospects", icon: "◇", permission: "leads.read" },

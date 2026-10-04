@@ -25,8 +25,15 @@ export default async function globalSetup() {
   if (organizationResult.error !== null) throw new Error(organizationResult.error.message);
   const userResult = await admin.from("users").insert({ id: businessUserId, organization_id: organizationId, auth_user_id: authUserId, first_name: "Utilisateur", last_name: "E2E", email: e2eFixture.email, role: "OWNER" });
   if (userResult.error !== null) throw new Error(userResult.error.message);
+  // Keep deterministic E2E off both live AI providers. Missing-key checks use cloud-only.
+  const settingsResult = await admin.from("ai_settings").insert({ organization_id: organizationId, mode: "CLOUD_ONLY" });
+  if (settingsResult.error !== null) throw new Error(settingsResult.error.message);
 
   return async () => {
+    for (const table of ["agent_tool_calls", "agent_runs", "agents", "ai_settings"]) {
+      const cleanup = await admin.from(table).delete().eq("organization_id", organizationId);
+      if (cleanup.error !== null) throw new Error(cleanup.error.message);
+    }
     const customerCleanup = await admin.from("customers").delete().eq("organization_id", organizationId);
     if (customerCleanup.error !== null) throw new Error(customerCleanup.error.message);
     const userCleanup = await admin.from("users").delete().eq("id", businessUserId);

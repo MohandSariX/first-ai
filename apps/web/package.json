@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@first-ai/agents": "workspace:*",
     "@first-ai/auth": "workspace:*",
     "@first-ai/database": "workspace:*",
     "@first-ai/schemas": "workspace:*",

@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  distDir: process.env.FIRST_AI_E2E === "true" ? ".next-e2e" : ".next",
   allowedDevOrigins: ["127.0.0.1"],
   transpilePackages: [
+    "@first-ai/agents",
     "@first-ai/auth",
     "@first-ai/database",
     "@first-ai/schemas",

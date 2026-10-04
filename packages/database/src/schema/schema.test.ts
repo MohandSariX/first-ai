@@ -2,6 +2,12 @@ import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
+  agents,
+  aiSettings,
+  agentRuns,
+  agentToolCalls,
+  agentRunStatusEnum,
+  modelProfileEnum,
   contacts,
   customerSites,
   customers,
@@ -21,6 +27,10 @@ describe("database schema exports", () => {
       getTableName(customerSites),
       getTableName(leads),
       getTableName(services),
+      getTableName(agents),
+      getTableName(agentRuns),
+      getTableName(agentToolCalls),
+      getTableName(aiSettings),
     ]).toEqual([
       "organizations",
       "users",
@@ -29,6 +39,10 @@ describe("database schema exports", () => {
       "customer_sites",
       "leads",
       "services",
+      "agents",
+      "agent_runs",
+      "agent_tool_calls",
+      "ai_settings",
     ]);
   });
 
@@ -39,5 +53,13 @@ describe("database schema exports", () => {
     expect(customerSites.organizationId.notNull).toBe(true);
     expect(leads.organizationId.notNull).toBe(true);
     expect(services.organizationId.notNull).toBe(true);
+    expect(agentRuns.organizationId.notNull).toBe(true);
+    expect(agentToolCalls.organizationId.notNull).toBe(true);
+    expect(agents.organizationId.notNull).toBe(false);
+    expect(aiSettings.organizationId.notNull).toBe(true);
+  });
+  it("exports bounded model profiles and observable run outcomes", () => {
+    expect(modelProfileEnum.enumValues).toEqual(["FAST", "STANDARD", "REASONING", "LOCAL_FAST", "LOCAL_STANDARD", "CLOUD_STANDARD", "CLOUD_REASONING"]);
+    expect(agentRunStatusEnum.enumValues).toEqual(["queued", "running", "waiting_approval", "completed", "failed", "cancelled", "timeout", "budget_exceeded"]);
   });
 });

@@ -15,5 +15,5 @@
     "**/*.ts",
     "**/*.tsx"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", ".next-e2e"]
 }

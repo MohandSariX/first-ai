@@ -7,13 +7,12 @@ import {
   createLeadSchema,
   customerSearchSchema,
   customerSiteSearchSchema,
-  entityIdSchema,
   leadSearchSchema,
   serviceSearchSchema,
 } from "@first-ai/schemas";
 import { z } from "zod";
 
-import type { ContactService, CustomerService, CustomerSiteService, LeadService, ServiceCatalogService } from "./crm-services.js";
+import type { ContactService, CrmDashboardService, CustomerService, CustomerSiteService, LeadService, LeadSummaryService, ServiceCatalogService } from "./crm-services.js";
 
 export interface ToolContext extends CurrentBusinessUser {
   readonly correlationId: string;
@@ -53,7 +52,19 @@ export function createCrmToolRegistry(services: Services): Readonly<Record<strin
     tool({ name: "leads.create", description: "Create a lead in the current organization.", risk: 1, permission: "leads.write", inputSchema: createLeadSchema, run: (c, i) => services.leads.createLead(c, i) }),
     tool({ name: "services.get", description: "Get one service in the current organization.", risk: 0, permission: "services.read", inputSchema: id("serviceId"), run: (c, i) => services.catalog.getService(c, (i as { serviceId: string }).serviceId) }),
     tool({ name: "services.search", description: "Search the service catalog.", risk: 0, permission: "services.read", inputSchema: serviceSearchSchema, run: (c, i) => services.catalog.searchServices(c, i) }),
-    tool({ name: "services.listActive", description: "List active services in the current organization.", risk: 0, permission: "services.read", inputSchema: entityIdSchema.omit({ id: true }), run: (c) => services.catalog.listServices(c, { active: true }) }),
+    tool({ name: "services.listActive", description: "List a bounded page of active services in the current organization.", risk: 0, permission: "services.read", inputSchema: serviceSearchSchema.omit({ query: true, active: true }), run: (c, i) => services.catalog.listServices(c, { ...(i as { limit: number; offset: number }), active: true }) }),
   ];
   return Object.fromEntries(registry.map((entry) => [entry.name, entry]));
+}
+
+// Counts must come from SQL aggregates, never from one page of search results.
+export function createCrmSummaryTools(dashboard: CrmDashboardService, leads: LeadSummaryService): Readonly<Record<string, Tool>> {
+  const definitions: Tool[] = [
+    tool({ name: "customers.countActive", description: "Exact count of active non-archived customers.", risk: 0, permission: "customers.read", inputSchema: z.strictObject({}), run: (c) => dashboard.countActiveCustomers(c) }),
+    tool({ name: "leads.countOpen", description: "Exact count of open leads (new, contacted, qualified, proposal).", risk: 0, permission: "leads.read", inputSchema: z.strictObject({}), run: (c) => dashboard.countOpenLeads(c) }),
+    tool({ name: "leads.countNew", description: "Exact count of new leads.", risk: 0, permission: "leads.read", inputSchema: z.strictObject({}), run: (c) => leads.countNew(c) }),
+    tool({ name: "leads.recentNew", description: "The five most recent new leads requiring first contact; not an exhaustive list.", risk: 0, permission: "leads.read", inputSchema: z.strictObject({}), run: (c) => dashboard.recentNewLeads(c) }),
+    tool({ name: "services.countActive", description: "Exact count of active non-archived services.", risk: 0, permission: "services.read", inputSchema: z.strictObject({}), run: (c) => dashboard.countActiveServices(c) }),
+  ];
+  return Object.fromEntries(definitions.map((definition) => [definition.name, definition]));
 }

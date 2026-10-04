@@ -5,6 +5,10 @@ import { createDatabaseClient } from "./client.js";
 import { organizations } from "./schema/index.js";
 
 const expectedTables = [
+  "agent_runs",
+  "agent_tool_calls",
+  "agents",
+  "ai_settings",
   "contacts",
   "customer_sites",
   "customers",
@@ -15,11 +19,15 @@ const expectedTables = [
 ];
 
 const expectedEnums = [
+  "agent_run_status",
+  "agent_status",
+  "agent_tool_call_status",
   "customer_risk_level",
   "customer_status",
   "customer_type",
   "lead_source",
   "lead_status",
+  "model_profile",
   "pricing_mode",
   "user_role",
 ];
@@ -135,7 +143,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 4 }]);
+    expect(result).toEqual([{ migrationCount: 6 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

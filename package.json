@@ -15,6 +15,7 @@
     "test": "pnpm --recursive --if-present test",
     "test:integration": "pnpm --filter @first-ai/database test:integration && pnpm --filter @first-ai/auth test:integration",
     "test:e2e": "dotenv -e .env.local -- playwright test",
+    "test:ollama": "dotenv -e .env.local -- pnpm --filter @first-ai/agents test:ollama",
     "db:generate": "pnpm --filter @first-ai/database db:generate",
     "db:migrate": "pnpm --filter @first-ai/database db:migrate",
     "db:studio": "pnpm --filter @first-ai/database db:studio",

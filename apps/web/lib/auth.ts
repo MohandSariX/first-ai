@@ -26,6 +26,12 @@ export async function requireBusinessUser(): Promise<CurrentBusinessUser> {
   }
 }
 
+// API boundaries must return 401 rather than redirecting a fetch to HTML.
+export async function getBusinessUser(): Promise<CurrentBusinessUser | null> {
+  try { return await resolveCurrentBusinessUser(await supabaseServerClient()); }
+  catch { return null; }
+}
+
 export async function signIn(email: string, password: string): Promise<boolean> {
   const { error } = await (await supabaseServerClient()).auth.signInWithPassword({ email, password });
   return error === null;
