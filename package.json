@@ -12,10 +12,18 @@
     "build": "pnpm --recursive --if-present build",
     "lint": "pnpm --recursive --if-present lint",
     "typecheck": "pnpm --recursive --if-present typecheck",
-    "test": "pnpm --recursive --if-present test"
+    "test": "pnpm --recursive --if-present test",
+    "test:integration": "pnpm --filter @first-ai/database test:integration",
+    "db:generate": "pnpm --filter @first-ai/database db:generate",
+    "db:migrate": "pnpm --filter @first-ai/database db:migrate",
+    "db:studio": "pnpm --filter @first-ai/database db:studio",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
+    "supabase": "^2.0.0",
     "typescript": "^5.9.0"
   }
 }
