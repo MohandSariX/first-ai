@@ -1,1 +1,1 @@
-export {};
+export * from "./mvp-entities.js";
