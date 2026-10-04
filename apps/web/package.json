@@ -3,16 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@first-ai/auth": "workspace:*",
+    "@first-ai/database": "workspace:*",
+    "@first-ai/schemas": "workspace:*",
+    "@first-ai/tools": "workspace:*",
+    "@first-ai/ui": "workspace:*",
     "next": "^16.0.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
@@ -22,6 +29,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
   }
 }

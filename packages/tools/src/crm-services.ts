@@ -43,7 +43,7 @@ function found<T>(value: T | undefined, resource: string): T {
 type Customers = Pick<CustomerRepository, "get" | "search" | "create" | "update" | "archive">;
 type Contacts = Pick<ContactRepository, "get" | "search" | "create" | "update">;
 type Sites = Pick<CustomerSiteRepository, "get" | "search" | "create" | "update">;
-type Leads = Pick<LeadRepository, "get" | "search" | "create" | "update" | "assignedUserExists">;
+type Leads = Pick<LeadRepository, "get" | "search" | "create" | "update" | "assignedUserExists" | "listAssignableUsers">;
 type Catalog = Pick<ServiceRepository, "get" | "search" | "create" | "update">;
 
 export class CustomerService {
@@ -79,7 +79,28 @@ export class LeadService {
   async updateLead(context: CurrentBusinessUser, leadId: string, input: unknown) { authorize(context, "leads.write"); const parsed = updateLeadSchema.parse(input); await this.validateAssignee(context.organizationId, parsed.assignedUserId); return found(await this.repository.update({ organizationId: context.organizationId, leadId }, parsed), "Lead"); }
   async updateLeadStatus(context: CurrentBusinessUser, leadId: string, input: unknown) { return this.updateLead(context, leadId, updateLeadStatusSchema.parse(input)); }
   async assignLead(context: CurrentBusinessUser, leadId: string, input: unknown) { return this.updateLead(context, leadId, assignLeadSchema.parse(input)); }
+  async listAssignableUsers(context: CurrentBusinessUser) { authorize(context, "leads.read"); return this.repository.listAssignableUsers(context.organizationId); }
   private async validateAssignee(organizationId: string, userId: string | null | undefined) { if (userId !== undefined && userId !== null && !(await this.repository.assignedUserExists(organizationId, userId))) throw new ResourceNotFoundError("Assigned user not found."); }
+}
+
+export class CrmDashboardService {
+  constructor(
+    private readonly customers: Pick<CustomerRepository, "countActive">,
+    private readonly leads: Pick<LeadRepository, "countOpen" | "recentNew">,
+    private readonly catalog: Pick<ServiceRepository, "countActive">,
+  ) {}
+  async getDashboard(context: CurrentBusinessUser) {
+    authorize(context, "customers.read");
+    const canReadLeads = hasPermission(context.role, "leads.read");
+    const canReadServices = hasPermission(context.role, "services.read");
+    const [activeCustomers, openLeads, activeServices, recentLeads] = await Promise.all([
+      this.customers.countActive(context.organizationId),
+      canReadLeads ? this.leads.countOpen(context.organizationId) : Promise.resolve(null),
+      canReadServices ? this.catalog.countActive(context.organizationId) : Promise.resolve(null),
+      canReadLeads ? this.leads.recentNew(context.organizationId, 5) : Promise.resolve([]),
+    ]);
+    return { activeCustomers, openLeads, activeServices, recentLeads };
+  }
 }
 
 export class ServiceCatalogService {

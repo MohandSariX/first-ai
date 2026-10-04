@@ -1,0 +1,17 @@
+import { hasPermission } from "@first-ai/auth";
+import { EmptyState, inputClassName, PageHeader, secondaryButtonClassName, StatusBadge } from "@first-ai/ui";
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { ServiceForm } from "../../../components/forms";
+import { withCrm } from "../../../lib/crm";
+import { formatMoney } from "../../../lib/format";
+
+export const metadata: Metadata = { title: "Prestations" };
+const PAGE_SIZE=20;
+export default async function ServicesPage({searchParams}:{readonly searchParams:Promise<{q?:string;active?:string;page?:string}>}) {
+  const params=await searchParams; const page=Math.max(Number.parseInt(params.page??"1",10)||1,1); const query=params.q?.trim(); const active=params.active==="true"?true:params.active==="false"?false:undefined;
+  const {rows,canWrite}=await withCrm(async({context,catalog})=>({rows:await catalog.searchServices(context,{query,active,limit:PAGE_SIZE,offset:(page-1)*PAGE_SIZE}),canWrite:hasPermission(context.role,"services.write")}));
+  const href=(next:number)=>`/services?${new URLSearchParams({...(query?{q:query}:{}),...(active===undefined?{}:{active:String(active)}),page:String(next)})}`;
+  return <div className="space-y-6"><PageHeader title="Prestations" description="Catalogue des services proposés à vos clients."/><form role="search" className="grid gap-2 sm:grid-cols-[1fr_12rem_auto]"><label className="sr-only" htmlFor="service-search">Rechercher</label><input id="service-search" name="q" defaultValue={query} placeholder="Code, nom ou catégorie" className={inputClassName}/><select aria-label="Filtrer par activité" name="active" defaultValue={active===undefined?"":String(active)} className={inputClassName}><option value="">Toutes</option><option value="true">Actives</option><option value="false">Inactives</option></select><button className={secondaryButtonClassName}>Filtrer</button></form>{canWrite?<ServiceForm/>:null}{rows.length===0?<EmptyState title="Aucune prestation" description={query?"Aucune prestation ne correspond à votre recherche.":"Créez une prestation pour constituer votre catalogue."}/>:<div className="grid gap-3 sm:grid-cols-2">{rows.map(service=><article key={service.id} className="rounded-2xl border border-neutral-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{service.code}</p><h2 className="mt-1 font-medium">{service.name}</h2><p className="mt-1 text-sm text-neutral-500">{service.category??"Sans catégorie"}</p></div><StatusBadge tone={service.active?"green":"neutral"}>{service.active?"Active":"Inactive"}</StatusBadge></div><div className="mt-4 flex items-end justify-between border-t border-neutral-100 pt-4"><div><p className="font-medium">{formatMoney(service.basePrice)}</p><p className="text-xs text-neutral-500">{service.pricingMode} · {service.estimatedDurationMinutes?`${service.estimatedDurationMinutes} min`:"Durée libre"}</p></div></div>{canWrite?<div className="mt-4"><ServiceForm values={service}/></div>:null}</article>)}</div>}<nav aria-label="Pagination prestations" className="flex justify-between"><span>{page>1?<Link href={href(page-1)} className={secondaryButtonClassName}>Précédent</Link>:null}</span>{rows.length===PAGE_SIZE?<Link href={href(page+1)} className={secondaryButtonClassName}>Suivant</Link>:null}</nav></div>;
+}

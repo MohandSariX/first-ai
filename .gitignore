@@ -12,6 +12,8 @@ out/
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Local tooling and editors
