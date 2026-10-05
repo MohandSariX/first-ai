@@ -56,7 +56,7 @@ export const agentRuns = pgTable("agent_runs", {
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
   estimatedCost: numeric("estimated_cost", { precision: 14, scale: 6 }),
-  finalOutput: jsonb("final_output").$type<{ text: string }>(),
+  finalOutput: jsonb("final_output").$type<{ text: string; agentCode?: string; delegatedBy?: string }>(),
   errorCode: varchar("error_code", { length: 80 }),
   errorMessage: text("error_message"),
   correlationId: uuid("correlation_id").notNull(),

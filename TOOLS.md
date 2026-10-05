@@ -123,6 +123,10 @@ exige une approbation humaine explicite avant exécution. Les possibilités futu
 d'autonomie décrites ailleurs ici ne constituent pas une exception. L'approbation
 ne contourne ni permissions, ni tenant, ni validation, ni invariants des services.
 Sans workflow d'approbation implémenté, aucun tool de mutation n'est exposé à l'IA.
+Le workflow spécialistes v1 expose uniquement `proposals.*` : création d'une
+proposition Risk 1, sans mutation métier. L'exécution humaine est séparée, via un
+registre déterministe fermé et les services existants ; aucun tool d'approbation
+ou d'exécution n'est fourni aux modèles. Voir `docs/agents/specialists-v1.md`.
 
 ### Risk 0 — Lecture
 

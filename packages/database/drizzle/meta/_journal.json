@@ -57,6 +57,20 @@
       "when": 1791205363055,
       "tag": "0007_security_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791206842015,
+      "tag": "0008_shallow_stick",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791208402154,
+      "tag": "0009_fixed_agent_brand",
+      "breakpoints": true
     }
   ]
 }

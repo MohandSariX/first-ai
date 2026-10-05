@@ -1,0 +1,2 @@
+ALTER TABLE "approval_requests" DROP CONSTRAINT "approvals_risk_check";--> statement-breakpoint
+ALTER TABLE "approval_requests" ADD CONSTRAINT "approvals_risk_check" CHECK ("approval_requests"."risk_level" between 1 and 2);

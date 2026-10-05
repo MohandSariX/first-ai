@@ -301,10 +301,16 @@ Cette règle minimale prévaut sur les anciennes possibilités d'autonomie Risk 
 décrites dans la vision des tools. Les actions manuelles humaines restent soumises
 à leurs permissions/invariants et aux validations sensibles Risk 3/4 existantes.
 
-Le workflow persistant n'est pas encore implémenté : tant qu'il ne l'est pas,
-ne pas exposer de mutation IA. Director v1 reste uniquement Risk 0, sans spécialiste.
+Le workflow v1 est implémenté pour les actions allowlistées de Pricing, Planning et
+Technician : leurs tools Risk 1 créent uniquement une proposition, jamais une
+mutation métier. Le demandeur humain approuve ses propres propositions via une
+frontière serveur authentifiée. Membership/organisation actifs et rôle sont relus
+et verrouillés ; une transaction lie exécution du service et reçu idempotent.
+Proposition périmée, rejetée ou état métier modifié : aucune exécution. Director
+reste Risk 0 ; sa frontière serveur peut orienter vers un seul spécialiste, sans
+délégation récursive. Détails : `docs/agents/specialists-v1.md`.
 
-Le futur workflow de ces actions utilise :
+Le workflow de ces actions utilise :
 
 `approval_requests`
 

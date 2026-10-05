@@ -89,7 +89,7 @@ export interface OperationalSession {
   timezone(organizationId: string): Promise<string>;
 }
 export interface OperationalStoreInterface extends OperationalSession { transaction<T>(operation: (session: OperationalSession) => Promise<T>): Promise<T> }
-class RepositorySession implements OperationalSession {
+export class RepositorySession implements OperationalSession {
   readonly quotes: QuoteRepository; readonly jobs: JobRepository; readonly reports: JobReportRepository;
   constructor(protected readonly db: Session, isTransactional = false) { this.quotes = new QuoteRepository(db, isTransactional); this.jobs = new JobRepository(db); this.reports = new JobReportRepository(db); }
   async customerSite(organizationId: string, customerId: string, siteId: string) { return (await this.db.select({ id: customerSites.id }).from(customerSites).innerJoin(customers, and(eq(customers.id, customerSites.customerId), eq(customers.organizationId, organizationId), isNull(customers.deletedAt))).where(and(eq(customerSites.id, siteId), eq(customerSites.customerId, customerId), eq(customerSites.organizationId, organizationId), isNull(customerSites.deletedAt))).limit(1)).length > 0; }

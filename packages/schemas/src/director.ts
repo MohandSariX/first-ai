@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { proposalViewSchema } from "./proposals.js";
 
 // No browser-provided scope or trusted history is accepted in v1.
 export const directorChatInputSchema = z.strictObject({
@@ -10,4 +11,7 @@ export const directorChatResponseSchema = z.object({
   provider: z.enum(["ollama", "openai"]).optional(),
   model: z.string().max(120).optional(),
   fallbackUsed: z.boolean().optional(),
+  specialist: z.enum(["director","pricing","planning","technician"]).optional(),
+  delegated: z.boolean().optional(),
+  proposals: z.array(proposalViewSchema).max(20).optional(),
 });

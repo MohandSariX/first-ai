@@ -12,7 +12,7 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
   et composants interactifs ciblés. UI opérationnelle majoritairement française.
 - `database` : PostgreSQL/Drizzle, migrations, repositories et transactions.
   `schemas` : Zod 4/DTO. `tools` : services métier et registres d'outils.
-  `auth` : sessions, membership, rôles et permissions. `agents` : Director/providers/routage.
+  `auth` : sessions, membership, rôles et permissions. `agents` : Director/spécialistes/providers/routage.
   `ui` : composants présentatifs/Markdown sûr. `shared` reste minimal.
 - Flux manuel : page/action → service → repository → DB. Flux IA : agent → outil
   autorisé/validé → même service → repository. Les agents n'ont pas d'accès SQL métier.
@@ -48,16 +48,17 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 
 ## Base actuelle
 
-15 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
+16 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
 
 - Identité/CRM : `organizations`, `users`, `customers`, `contacts`, `customer_sites`,
   `leads`, `services`.
 - Opérations : `quotes`, `quote_items`, `jobs`, `job_reports`.
-- IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`.
+- IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Huit migrations 0000–0007 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0007_security_hardening.sql` (helper membership actif et
-policy prospects ; aucun changement de tables). Appliquée au Supabase local,
+Dix migrations 0000–0009 dans `packages/database/drizzle/`, seule source de migration
+applicative. 0008 ajoute approval_requests, enum lifecycle, FK tenant, index et RLS
+demandeur. Dernière : `0009_fixed_agent_brand.sql`, check des risques proposés 1/2
+selon TOOLS (planning/finalisation Risk 2). Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
 CRM et devis/interventions. Le SQL custom des migrations porte aussi la sécurité
@@ -86,11 +87,25 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
 
 ## Director et IA hybride
 
-- Seul agent implémenté : `director:v1`, texte, mono-agent, français, lecture seule.
+- `director:v1` reste texte/français/lecture seule à l'inférence.
   22 outils allowlistés Risk 0 puis filtrés par rôle : lectures CRM/catalogue,
   cinq agrégats CRM, `quotes.get/search`, `jobs.get/search/getToday`, `jobReports.get`.
   Les registres comprennent des outils Risk 1 de création/brouillon, mais Director
-  ne les reçoit jamais. Aucun handoff ni mutation IA.
+  ne les reçoit jamais. La frontière Assistant route au plus un spécialiste par
+  intention déterministe ou sélection explicite : `pricing:v1`, `planning:v1`,
+  `technician:v1`. Pas de handoff récursif ni de modèles locaux parallèles.
+- Pricing lit clients/sites/catalogue/devis et calcule via le service déterministe ;
+  propose brouillon, ajout/modification de ligne, passage prêt, jamais acceptation.
+  Planning lit interventions/techniciens autorisés et propose créneau/replanification/
+  affectation. Technician lit les interventions accessibles et propose démarrage,
+  brouillon/modification/finalisation rapport puis fin de job, sans procédures chimiques inventées.
+- Les spécialistes ne reçoivent aucune mutation métier directe. `proposals.*`
+  persiste uniquement une action allowlistée strictement validée. Seul le demandeur
+  humain décide ; expiry 30 min, pending/approved/rejected/executed/expired/failed.
+  Approbation : session fraîche, membership/organisation actifs et rôle relus sous
+  verrou, scope, payload, fingerprint métier et invariants services revérifiés.
+  Mutation + receipt dans une transaction, services sous savepoints ; retries
+  concurrents exécutent une fois. Rejet/périmé/failed ne sont pas exécutables.
 - `AiProvider` : Ollama natif `/api/tags`/`/api/chat` et OpenAI via `@openai/agents`.
   Même contexte serveur figé, outils, budgets et logs sur les deux chemins.
 - `ai_settings` : configuration persistante par tenant, HYBRID par défaut ;
@@ -123,32 +138,36 @@ Routes protégées : `/dashboard`, `/customers`, `/customers/[id]`, `/leads`, `/
 `/quotes`, `/quotes/[id]`, `/jobs`, `/jobs/[id]`, `/assistant`, `/settings/ai`.
 `/` redirige vers dashboard ; `/login` et `GET /api/health` sont publics.
 `POST /api/assistant` exige session, même origine et input Zod strict/borné.
+`GET/POST /api/assistant/proposals` liste les 20 dernières propositions propres et
+traite la décision humaine. Assistant partagé : sélection spécialiste, cartes
+verticales action/valeurs/risque/statut, confirmation Approve/Reject et lien résultat.
 Navigation desktop et mobile à cinq destinations principales + menu secondaire.
 Dashboard : vrais comptes CRM, devis en attente, interventions du jour et prospects récents.
 
-Définitions Director créées par tenant/version ; runs et tool calls persistés via
+Définitions des quatre agents créées par tenant/version ; runs et tool calls persistés via
 port de stockage : objectif/résultats expurgés, statut, dates, corrélation, compteurs,
 tokens, provider/modèle/profil/routage/fallback. RLS des traces restreinte au déclencheur.
+Run spécialisé : agentCode/delegatedBy dans le résultat ; proposal tool call lié à
+approval_request_id avec approval_required. RLS approvals : demandeur/tenant, aucune écriture SQL utilisateur.
 Coût estimé null ; pas de chaîne de pensée ni historique SDK persisté. Chat visible
 limité à 20 messages locaux, seul le message courant envoyé, Markdown allowlisté sûr.
 Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 
 ## Limitations et domaines différés
 
-- Pas d'approvals persistées/exécutables ; les colonnes/statuts d'approbation des traces
-  sont des réservations. Politique acceptée : Risk 0 autorisé peut s'exécuter directement,
-  toute mutation/action IA Risk 1+ exige une approbation humaine explicite préalable,
-  sans contourner permissions, tenant ni invariants. Exécution déterministe allowlistée
-  uniquement ; aucune mutation IA exposée tant que le workflow n'existe pas.
+- Approvals v1 : seulement les actions du registre fermé ; pas d'acceptation IA de
+  devis, cross-user approver, notifications, batch, cancellation ni inbox exhaustive.
+  Expiry évaluée à la décision, sans scheduler. L'humain doit vérifier les valeurs
+  proposées ; validation technique n'est pas validation commerciale automatique.
 - La parité RBAC/RLS n'est pas un catalogue universel : hors restrictions spécifiques,
   certaines policies restent tenant-only. Les services restent la frontière métier.
   Un contexte privilégié déjà résolu n'est pas révoqué en cours d'exécution ; les
-  futures actions différées devront revérifier le membership au moment d'agir.
+  approbations différées revérifient et verrouillent membership/organisation/rôle.
 - Références opportunities/contracts/pest_types/employees/documents temporairement
   omises ; assignment et auteur de rapport référencent des users, pas des employés.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
   photos/signatures, disponibilité RH/certifications, trajets ni coûts réels détaillés.
-- Hors implémentation : spécialistes, autonomie/queues, mémoire IA/conversations
+- Hors implémentation : autres spécialistes, autonomie/queues, mémoire IA/conversations
   persistées, audit_logs/domain_events/tasks, factures/paiements/finance/Qonto,
   contrats/stocks/achats/RH, knowledge/pricing intelligence, voix et offline/PWA.
   MFA et onboarding avancé restent différés ; performance live Ollama dépend du matériel.
@@ -157,17 +176,19 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 
 Suites présentes : Vitest métier/calculs/permissions/routage/providers mockés ;
 intégration locale DB/Auth/services (RLS, UUID connus, FK, numérotation/concurrence,
-atomicité) ; trois scénarios Playwright CRM, Assistant/settings et devis → job → rapport mobile.
+atomicité, approvals/concurrence/révocation/stale/conflicts) ; quatre scénarios
+Playwright CRM, Assistant/settings, devis → job → rapport mobile et approbation mobile.
 `pnpm test` ne nécessite aucun runtime externe ; `pnpm test:integration` et
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation du durcissement au 2026-10-05 :
-`lint`, `typecheck`, 127 tests unitaires et 41 tests d'intégration locale passent.
-Les nouveaux tests vérifient les statuts/soft-delete, la révocation avec session valide
-sur les 15 tables et la parité des six rôles pour listes/UUID/counts de prospects.
-Build, E2E et providers live non réexécutés pour ce jalon ciblé ; pas de validation production.
+`supabase:start/stop/status`. Validation spécialistes au 2026-10-05 : lint,
+typecheck, build, 160 tests unitaires, 47 tests d'intégration locale et quatre E2E
+passent. Les deux migrations locales ont un second passage sûr via tracking.
+Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
+la suite live optionnelle a un échec sur son ancien smoke CRM (timeout local 35 s).
+Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
 
-Prochain jalon ciblé, non implémenté : fondation des agents spécialisés + système
-d'approbation humaine, puis Pricing Agent, Planning Agent et Technician Agent.
+Prochain jalon : consolidation des evals spécialistes, audit/consultation des traces
+et protection/rétention des approvals avant toute autonomie ou extension d'agents.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

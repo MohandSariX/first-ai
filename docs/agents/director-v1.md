@@ -1,6 +1,6 @@
 # Director v1
 
-Director is a text-only, single-agent, read-only CRM assistant. Cloud execution uses
+Director's model execution is a text-only, read-only CRM assistant. Cloud execution uses
 Responses through the official `@openai/agents` package; local execution uses Ollama.
 Both implement the same internal execution port. The versioned instructions
 and allowlist live in `packages/agents/src/director`.
@@ -17,7 +17,11 @@ receive no report tools. Neither hybrid provider receives create/accept/schedule
 tools. See [operational foundation](../architecture/quotes-jobs.md) for these boundaries.
 Aggregate tools use database counts, not paginated result lengths. Search is bounded
 to 20 records; results and strings are bounded and redacted. Tool results remain
-untrusted data, never system instructions. No CRM writes or handoffs are possible.
+untrusted data, never system instructions. No CRM writes or model-driven handoffs are possible.
+The Assistant server can route at most one request to Pricing, Planning or Technician
+before inference; see [specialists v1](specialists-v1.md). Specialists may persist
+proposals only, never execute business writes without explicit human approval.
+Director's own Risk 0 allowlist and zero recursive delegation remain unchanged.
 
 Runtime profiles are LOCAL_FAST, LOCAL_STANDARD, CLOUD_STANDARD and CLOUD_REASONING.
 Organization settings select HYBRID (default), LOCAL_ONLY or CLOUD_ONLY, provider

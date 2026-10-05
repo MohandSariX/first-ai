@@ -11,11 +11,11 @@ export const executeDirector: DirectorExecutor = async (input) => {
   const provider = new OpenAIProvider({ apiKey, useResponses: true });
   const runner = new Runner({
     modelProvider: provider, traceIncludeSensitiveData: false,
-    workflowName: "first-ai-director-v1",
+    workflowName: `first-ai-${input.agentName ?? "director:v1"}`,
     groupId: input.runId,
   });
   const agent = new Agent({
-    name: "director:v1", instructions: currentDirectorInstructions(), model: input.model,
+    name: input.agentName ?? "director:v1", instructions: input.instructions ?? currentDirectorInstructions(), model: input.model,
     modelSettings: { maxTokens: DIRECTOR_CONFIG.maxOutputTokens, parallelToolCalls: false, store: false },
     tools: input.tools.map((definition) => tool({
       name: definition.name, description: definition.description,

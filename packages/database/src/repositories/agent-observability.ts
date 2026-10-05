@@ -9,7 +9,7 @@ export class AgentObservabilityRepository {
 
   async ensureDirector(organizationId: string, configuration: Record<string, unknown>): Promise<string> {
     const [row] = await this.database.insert(agents).values({
-      organizationId, code: "director", name: "Director", version: "v1",
+      organizationId, code: typeof configuration.code === "string" ? configuration.code : "director", name: typeof configuration.name === "string" ? configuration.name : "Director", version: "v1",
       autonomyLevel: 0, modelProfile: "LOCAL_STANDARD", configuration,
     }).onConflictDoUpdate({
       target: [agents.organizationId, agents.code, agents.version],
@@ -30,7 +30,7 @@ export class AgentObservabilityRepository {
     await this.database.insert(agentToolCalls).values(input);
   }
   async finishToolCall(organizationId: string, callId: string, changes: Partial<Pick<typeof agentToolCalls.$inferInsert,
-    "status" | "completedAt" | "output" | "errorCode" | "errorMessage">>): Promise<void> {
+    "status" | "completedAt" | "output" | "errorCode" | "errorMessage" | "approvalRequestId">>): Promise<void> {
     await this.database.update(agentToolCalls).set(changes).where(and(eq(agentToolCalls.organizationId, organizationId), eq(agentToolCalls.id, callId)));
   }
   async getRun(organizationId: string, runId: string) {

@@ -1,11 +1,13 @@
-import { AiSettingsService, DirectorError, OllamaProvider, OpenAIProvider, runDirector } from "@first-ai/agents/server";
-import { AgentObservabilityRepository, AiSettingsRepository } from "@first-ai/database";
-import { directorChatInputSchema } from "@first-ai/schemas";
-import { createCrmSummaryTools, createCrmToolRegistry, createOperationalToolRegistry } from "@first-ai/tools";
+import { AiSettingsService, DirectorError, OllamaProvider, OpenAIProvider, runAssistant } from "@first-ai/agents/server";
+import { AgentObservabilityRepository, AiSettingsRepository, ApprovalRepository } from "@first-ai/database";
+import { assistantInputSchema } from "@first-ai/schemas";
+import { ApprovalService, createCrmSummaryTools, createCrmToolRegistry, createOperationalToolRegistry } from "@first-ai/tools";
+import { z } from "zod";
 import { NextResponse } from "next/server";
 
 import { getBusinessUser } from "../../../lib/auth";
 import { createCrm } from "../../../lib/crm";
+import { hasSameOrigin } from "../../../lib/request-security";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -13,11 +15,7 @@ const failure = (code: string, message: string, status: number) => NextResponse.
 
 export async function POST(request: Request) {
   // Cookie-authenticated POST: refuse cross-origin requests before any paid run.
-  const origin = request.headers.get("origin");
-  let sameOrigin = false;
-  try { sameOrigin = origin !== null && new URL(origin).host === request.headers.get("host") && new URL(origin).protocol === new URL(request.url).protocol; }
-  catch { sameOrigin = false; }
-  if (!sameOrigin) {
+  if (!hasSameOrigin(request)) {
     return failure("FORBIDDEN", "Origine de la demande non autorisée.", 403);
   }
   const user = await getBusinessUser();
@@ -39,16 +37,19 @@ export async function POST(request: Request) {
       }
       chunks.push(chunk.value);
     }
-    parsed = directorChatInputSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    parsed = assistantInputSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
   }
   catch { return failure("VALIDATION_ERROR", "Message invalide.", 400); }
   if (!parsed.success) return failure("VALIDATION_ERROR", "Saisissez un message entre 1 et 2 000 caractères.", 400);
   let crm: Awaited<ReturnType<typeof createCrm>> | undefined;
   try {
     crm = await createCrm(user);
-    const registry = { ...createCrmToolRegistry(crm), ...createCrmSummaryTools(crm.dashboard, crm.leadSummary), ...createOperationalToolRegistry(crm) };
+    const registry = { ...createCrmToolRegistry(crm), ...createCrmSummaryTools(crm.dashboard, crm.leadSummary), ...createOperationalToolRegistry(crm),
+      "planning.technicians": { name:"planning.technicians",description:"Liste bornée des techniciens actifs pour une affectation. Ne prouve pas leur disponibilité.",risk:0 as const,permission:"jobs.schedule" as const,inputSchema:z.strictObject({}),async execute() { return {success:true as const,data:await crm!.jobs.listTechnicians(user)}; } },
+    };
     const settings = await new AiSettingsService(new AiSettingsRepository(crm.database)).get(user);
-    const result = await runDirector(parsed.data, user, {
+    const result = await runAssistant(parsed.data, user, {
+      approvals: new ApprovalService(new ApprovalRepository(crm.database)),
       registry, store: new AgentObservabilityRepository(crm.database),
       signal: request.signal,
       settings, providers: { ollama: new OllamaProvider(settings.ollamaBaseUrl), openai: new OpenAIProvider() },

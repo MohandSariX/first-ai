@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hasPermission, type CurrentBusinessUser } from "@first-ai/auth";
+import { hasPermission, type CurrentBusinessUser, type Permission } from "@first-ai/auth";
 import { directorChatInputSchema } from "@first-ai/schemas";
 import type { Tool } from "@first-ai/tools";
 import type { AiSettings } from "@first-ai/schemas";
@@ -16,15 +16,17 @@ export async function runDirector(input: unknown, user: CurrentBusinessUser, dep
   registry: Readonly<Record<string, Tool>>; store: RunStore; execute?: DirectorExecutor;
   environment?: Readonly<Record<string, string | undefined>>; signal?: AbortSignal;
   settings?: AiSettings; providers?: Record<"ollama" | "openai", AiProvider>;
+  specialization?: {code:string;name:string;instructions:string;permission:Permission;reads:readonly string[];proposals:readonly string[];delegatedBy?:string};
 }) {
   const { message } = directorChatInputSchema.parse(input);
   if (!hasPermission(user.role, "customers.read")) throw new DirectorError("FORBIDDEN", "Accès à l’assistant non autorisé.");
+  if (dependencies.specialization && !hasPermission(user.role,dependencies.specialization.permission)) throw new DirectorError("FORBIDDEN","Accès à ce spécialiste non autorisé.");
   if (dependencies.settings && !dependencies.providers) throw new DirectorError("INTERNAL_ERROR", "Configuration des fournisseurs IA incomplète.");
   const objective = redactText(message, 2000);
   let selection: ModelSelection = new HybridModelRouter().resolve(dependencies.settings ?? defaultAiSettings(dependencies.environment), classifyWorkload(objective), DIRECTOR_CONFIG);
   let fallbackReason: string | undefined;
   const model = selection.model;
-  const agentId = await dependencies.store.ensureDirector(user.organizationId, { ...DIRECTOR_CONFIG });
+  const agentId = await dependencies.store.ensureDirector(user.organizationId, { ...DIRECTOR_CONFIG, ...(dependencies.specialization ? {code:dependencies.specialization.code,name:dependencies.specialization.name,maxDelegations:0} : {}) });
   const runId = randomUUID();
   const correlationId = randomUUID();
   await dependencies.store.createRun({
@@ -65,7 +67,7 @@ export async function runDirector(input: unknown, user: CurrentBusinessUser, dep
     }, (operation) => {
       activeTools.add(operation);
       void operation.then(() => activeTools.delete(operation), () => activeTools.delete(operation));
-    });
+    }, dependencies.specialization);
     // Race guarantees a response deadline even if an SDK/provider ignores cancellation.
     const aborted = new Promise<never>((_, reject) => {
       if (controller.signal.aborted) reject(controller.signal.reason);
@@ -74,6 +76,7 @@ export async function runDirector(input: unknown, user: CurrentBusinessUser, dep
     const text = redactText(await Promise.race([
       execute({
         runId, message: objective, model, tools, signal: controller.signal,
+        ...(dependencies.specialization ? {agentName:`${dependencies.specialization.code}:v1`,instructions:dependencies.specialization.instructions} : {}),
         onUsage: (inputs, outputs, iterations) => {
           if (terminalStatus) return;
           inputTokens = inputs; outputTokens = outputs; iterationCount = iterations;
@@ -87,7 +90,7 @@ export async function runDirector(input: unknown, user: CurrentBusinessUser, dep
     await Promise.allSettled([...activeTools]);
     await dependencies.store.finishRun(user.organizationId, runId, {
       status: "completed", completedAt: new Date(), iterationCount, toolCallCount,
-      inputTokens, outputTokens, finalOutput: { text },
+      inputTokens, outputTokens, finalOutput: { text, ...(dependencies.specialization ? {agentCode:dependencies.specialization.code,delegatedBy:dependencies.specialization.delegatedBy} : {}) },
       ...(selection ? { provider: selection.provider, modelName: selection.model, modelProfile: selection.modelProfile, routingClass: selection.routingClass, fallbackUsed: !!fallbackReason, fallbackReason } : {}),
     });
     return { runId, text, ...(selection ? { provider: selection.provider, model: selection.model, fallbackUsed: !!fallbackReason } : {}) };

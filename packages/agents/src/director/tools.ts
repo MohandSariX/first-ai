@@ -48,13 +48,16 @@ export function createDirectorTools(
   signal: AbortSignal,
   beforeCall: () => void,
   track: (operation: Promise<unknown>) => void = () => undefined,
+  specialization?: { reads: readonly string[]; proposals: readonly string[] },
 ): DirectorTool[] {
   const trusted = Object.freeze({ ...context });
-  return DIRECTOR_TOOL_ALLOWLIST.flatMap((name) => {
+  return (specialization ? [...specialization.reads,...specialization.proposals] : DIRECTOR_TOOL_ALLOWLIST).flatMap((name) => {
     const candidate = registry[name];
     if (!candidate) throw new Error(`Missing Director tool: ${name}`);
     const definition: Tool = candidate;
-    if (definition.name !== name || definition.risk !== 0 || !definition.permission.endsWith(".read")) {
+    const proposal = specialization?.proposals.includes(name) && name.startsWith("proposals.");
+    const planningLookup = !!specialization && name === "planning.technicians" && definition.permission === "jobs.schedule";
+    if (definition.name !== name || (proposal ? definition.risk !== 1 : definition.risk !== 0 || (!definition.permission.endsWith(".read") && !planningLookup))) {
       throw new Error(`Unsafe Director tool registration: ${name}`);
     }
     if (!hasPermission(trusted.role, definition.permission)) return [];
@@ -77,7 +80,7 @@ export function createDirectorTools(
         const callId = randomUUID();
         await store.startToolCall({
           id: callId, organizationId: trusted.organizationId, agentId: trusted.agentId,
-          agentRunId: trusted.agentRunId, toolName: name, riskLevel: 0,
+          agentRunId: trusted.agentRunId, toolName: name, riskLevel: definition.risk, approvalRequired: !!proposal,
           input: sanitizeData(input), status: "running", startedAt: new Date(),
         });
         try {
@@ -85,7 +88,7 @@ export function createDirectorTools(
           if (invalidInput) throw new DirectorError("VALIDATION_ERROR", "Arguments invalides.");
           // Even direct invocation (outside SDK parsing) rejects scope injection.
           const parsed = parameters.parse(input);
-          const normalized: Record<string, unknown> = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value !== null));
+          const normalized: Record<string, unknown> = Object.fromEntries(Object.entries(parsed).filter(([key, value]) => value !== null || (definition.inputSchema instanceof z.ZodObject && !definition.inputSchema.shape[key]?.isOptional())));
           if ("limit" in parameters.shape) normalized.limit ??= 20;
           if ("offset" in parameters.shape) normalized.offset ??= 0;
           signal.throwIfAborted();
@@ -101,6 +104,7 @@ export function createDirectorTools(
           await store.finishToolCall(trusted.organizationId, callId, {
             status: result.success ? "completed" : "failed", output: output.data,
             completedAt: new Date(), ...(!result.success ? { errorCode: result.error.code, errorMessage: "Lecture des données impossible." } : {}),
+            ...(proposal && result.success && typeof result.data === "object" && result.data !== null && "id" in result.data && typeof result.data.id === "string" ? { approvalRequestId: result.data.id } : {}),
           });
           return output.text;
         } catch (error: unknown) {

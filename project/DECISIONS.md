@@ -76,8 +76,9 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 ## ADR-08 — Director v1 strictement read-only
 
 - **Statut :** adopté, implémenté.
-- **Décision :** un seul agent texte, autonomie 0, allowlist Risk 0 et permissions
-  de lecture vérifiées en code ; aucune délégation ni mutation.
+- **Décision :** exécution Director texte, autonomie 0, allowlist Risk 0 et permissions
+  de lecture vérifiées en code ; aucune mutation ni délégation récursive par modèle.
+  La frontière Assistant peut orienter vers un unique spécialiste avant inférence (ADR-17).
 - **Raison :** établir une assistance traçable sans confier l'autorisation aux prompts.
 - **Conséquence :** les outils d'écriture existants ne sont pas disponibles à Director, sur aucun provider.
 - **Sources :** `docs/agents/director-v1.md`, `packages/agents/src/director/config.ts`, `packages/agents/src/director/tools.ts`.
@@ -121,7 +122,7 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 
 ## ADR-13 — Toute mutation IA Risk 1+ exige une approbation humaine
 
-- **Statut :** accepté ; politique établie, workflow persistant non implémenté.
+- **Statut :** accepté, workflow persistant v1 implémenté pour le registre des spécialistes.
 - **Décision :** Risk 0 lecture/analyse peut s'exécuter directement avec autorisation.
   Toute mutation/action IA Risk 1+ exige l'approbation explicite d'un humain autorisé
   avant exécution, sur une action allowlistée déterministe et ses paramètres précis.
@@ -129,9 +130,10 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Raison :** séparer proposition IA, autorité humaine et exécution autorisée.
 - **Conséquence :** revalidation du membership, des permissions, du tenant et des
   invariants métier à l'exécution ; aucun droit supplémentaire accordé par approval.
-  Jamais de code/SQL/shell ou exécution arbitraire générés par modèle. Workflow futur
-  traçable, expirant et protégé contre double exécution. Tant qu'il est absent, IA
-  read-only : Director inchangé, aucun spécialiste ni table/service/UI d'approval.
+  Jamais de code/SQL/shell ou exécution arbitraire générés par modèle. Workflow
+  traçable, expirant et protégé contre double exécution. Les spécialistes créent
+  seulement des propositions ; Director conserve ses tools Risk 0. L'exécution
+  humaine suit le registre et les services, jamais le code généré par modèle.
   Remplace les possibilités d'autonomie Risk 1/2 précédemment envisagées dans TOOLS.
 - **Sources :** `SECURITY.md` §13, `TOOLS.md` §5, `AGENTS.md` §§34/143, allowlist Director.
 
@@ -162,3 +164,28 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Conséquence :** numéros supprimés réservés, capacité 999 999/an/tenant ; un job pour tout le devis,
   pas une visite par ligne. Rapport unique, finalisé immuable avant achèvement du job.
 - **Sources :** repositories/services operations, migration 0006, tests opérationnels.
+
+## ADR-17 — Spécialistes supervisés, délégation déterministe unique
+
+- **Statut :** adopté, implémenté v1.
+- **Décision :** choisir Pricing/Planning/Technician à la frontière serveur par
+  intention ou sélection explicite validée ; une seule inférence spécialisée,
+  aucun handoff récursif. Même hybrid router, contexte, limites, outils et traces.
+- **Raison :** garder la latence/RAM bornées et les règles métier indépendantes des providers.
+- **Conséquence :** heuristiques imparfaites, priorité Pricing puis Planning ; sélection
+  manuelle disponible. Modèles ne reçoivent que lectures autorisées/proposals, sans
+  accès aux mutations ni décisions d'approbation.
+- **Sources :** `packages/agents/src/specialists.ts`, `docs/agents/specialists-v1.md`.
+
+## ADR-18 — Approbation idempotente atomique, liée au demandeur
+
+- **Statut :** adopté, implémenté v1.
+- **Décision :** une table approval_requests, payload strict par action allowlistée,
+  expiry 30 minutes, fingerprint serveur ; seul le demandeur humain peut décider.
+  Relire/verrouiller membership/organisation actifs et rôle, puis proposition/état
+  métier ; services existants sous savepoints, mutation et reçu dans la même transaction.
+- **Raison :** empêcher autorisation périmée, actions modifiées et double exécution.
+- **Conséquence :** même receipt lors d'un retry exécuté ; erreurs rollback puis failed.
+  Rejet/expiry/failed requièrent une nouvelle proposition, aucun replay de mutation.
+  Pas de notification, cross-user approver, inbox exhaustive ni audit/event général.
+- **Sources :** `packages/tools/src/approval-service.ts`, `packages/database/src/repositories/approvals.ts`, migration 0008.

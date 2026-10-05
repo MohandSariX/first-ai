@@ -13,7 +13,9 @@ Their future foreign-key columns are intentionally omitted: `opportunity_id`,
 active First AI TECHNICIAN user, and `job_reports.technician_id` references the
 First AI user who authored the report. These are explicitly user identities, not
 employee identities; a future employee phase needs an additive, reviewed mapping.
-There are no signatures, uploads, stock usage, invoices, payments or specialist agents.
+There are no signatures, uploads, stock usage, invoices or payments.
+Supervised specialist agents now reuse these services through
+[human-approved proposals](../agents/specialists-v1.md), without direct AI writes.
 
 `quote_items.organization_id` is added to support database-level composite quote
 and service foreign keys. A quote/site and job/site must also agree on customer,

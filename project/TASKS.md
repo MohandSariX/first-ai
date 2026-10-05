@@ -5,19 +5,15 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun chantier produit en cours. Durcissement sécurité terminé ; maintenir
+- Aucun chantier produit en cours. Spécialistes v1 supervisés terminés ; maintenir
   la mémoire du projet après chaque jalon.
 
 ## NEXT
 
-1. Cadrer le jalon spécialistes/approvals sans élargir prématurément les accès
-   ou l'autonomie ; garder Director v1 read-only.
-2. Définir contrats versionnés, permissions/outils/budgets et evals des spécialistes.
-3. Implémenter la politique Risk 1+ acceptée : validation humaine explicite,
-   expiration, revalidation du membership/tenant/droits et exécution déterministe
-   idempotente sans auto-approbation.
-4. Livrer progressivement Pricing Agent, Planning Agent, Technician Agent sur les
-   services existants, en mode supervisé. Director v1 reste read-only.
+1. Consolider les evals spécialistes sur scénarios de devis/planning/terrain fictifs.
+2. Cadrer audit/consultation des traces, rétention et contrôle d'abus des approvals.
+3. Garder Director read-only et les spécialistes supervisés ; aucun élargissement
+   d'autonomie, d'actions allowlistées ou d'approbateurs sans mission explicite.
 
 ## LATER
 
