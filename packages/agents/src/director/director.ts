@@ -2,7 +2,7 @@ import { Agent, AgentsError, MaxTurnsExceededError, OpenAIProvider, Runner, tool
 
 import { DirectorError, type DirectorExecutor } from "../types.js";
 import { DIRECTOR_CONFIG } from "./config.js";
-import { DIRECTOR_INSTRUCTIONS } from "./instructions.js";
+import { currentDirectorInstructions } from "./instructions.js";
 
 // Only exported via the server-only entry point. Never import into a client component.
 export const executeDirector: DirectorExecutor = async (input) => {
@@ -15,7 +15,7 @@ export const executeDirector: DirectorExecutor = async (input) => {
     groupId: input.runId,
   });
   const agent = new Agent({
-    name: "director:v1", instructions: DIRECTOR_INSTRUCTIONS, model: input.model,
+    name: "director:v1", instructions: currentDirectorInstructions(), model: input.model,
     modelSettings: { maxTokens: DIRECTOR_CONFIG.maxOutputTokens, parallelToolCalls: false, store: false },
     tools: input.tools.map((definition) => tool({
       name: definition.name, description: definition.description,

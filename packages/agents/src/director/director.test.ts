@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hasPermission } from "@first-ai/auth";
+import { hasPermission, type Permission } from "@first-ai/auth";
 import { directorChatInputSchema, customerSearchSchema } from "@first-ai/schemas";
 import type { Tool, ToolContext } from "@first-ai/tools";
 import { tool as sdkTool } from "@openai/agents";
@@ -21,7 +21,7 @@ function store(): RunStore {
 }
 function registry(): Record<string, Tool> {
   return Object.fromEntries(DIRECTOR_TOOL_ALLOWLIST.map((name) => [name, {
-    name, description: name, risk: 0, permission: name.startsWith("leads.") ? "leads.read" : "customers.read",
+    name, description: name, risk: 0, permission: (name.startsWith("jobReports.") ? "job_reports.read" : name.startsWith("quotes.") ? "quotes.read" : name.startsWith("jobs.") ? "jobs.read" : name.startsWith("leads.") ? "leads.read" : "customers.read") as Permission,
     inputSchema: name.endsWith(".search") ? customerSearchSchema : z.strictObject({}),
     execute: vi.fn(async () => ({ success: true as const, data: [] })),
   }]));
@@ -54,7 +54,7 @@ describe("Director v1 safety", () => {
     const definitions = registry();
     definitions["customers.create"] = { ...definitions["customers.get"]!, name: "customers.create", risk: 1 };
     const available = tools(definitions);
-    expect(available).toHaveLength(16);
+    expect(available).toHaveLength(22);
     expect(available.some((entry) => /create|update|delete|assign/.test(entry.name))).toBe(false);
     await runDirector({ message: "Crée un client Dupont" }, context, { registry: definitions, store: store(),
       execute: async ({ tools: registered }) => {
@@ -67,6 +67,26 @@ describe("Director v1 safety", () => {
   it("fails closed if an allowlisted definition becomes risky", () => {
     const definitions = registry(); definitions["customers.get"] = { ...definitions["customers.get"]!, risk: 1 };
     expect(() => tools(definitions)).toThrow("Unsafe Director tool");
+  });
+  it.each(["LOCAL_ONLY", "CLOUD_ONLY"] as const)("%s can read operational data but cannot create, accept or complete", async mode => {
+    for (const role of ["OWNER", "TECHNICIAN", "ACCOUNTANT", "READ_ONLY"] as const) {
+      const definitions = registry();
+      definitions["jobs.get"] = { ...definitions["jobs.get"]!, inputSchema: z.strictObject({ jobId: z.uuid() }) };
+      const forbiddenNames = ["quotes.createDraft", "quotes.accept", "jobs.createDraft", "jobs.complete", "jobReports.createDraft"];
+      for (const name of forbiddenNames) definitions[name] = { ...definitions["jobs.get"]!, name, risk: 1, execute: vi.fn(async () => ({ success: true as const, data: [] })) };
+      const execute = async ({ tools: available }: import("../types.js").DirectorExecution) => {
+        expect(available.some(t => t.name === "jobs_get")).toBe(true);
+        expect(available.some(t => t.name === "quotes_get")).toBe(role !== "TECHNICIAN");
+        expect(available.some(t => t.name === "jobReports_get")).toBe(role !== "ACCOUNTANT");
+        expect(available.some(t => /create|accept|complete|update|schedule/.test(t.name))).toBe(false);
+        await available.find(t => t.name === "jobs_get")!.invoke({ jobId: context.userId });
+        return "Lecture seule, aucune action exécutée.";
+      };
+      const { defaultAiSettings } = await import("../hybrid-router.js");
+      await runDirector({ message: "Accepte le devis et termine l’intervention" }, { ...context, role }, { registry: definitions, store: store(), settings: { ...defaultAiSettings({}), mode }, providers: { ollama: { name: "ollama", execute }, openai: { name: "openai", execute } } });
+      expect(definitions["jobs.get"]!.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: context.organizationId, userId: context.userId, role }), { jobId: context.userId });
+      for (const name of forbiddenNames) expect(definitions[name]!.execute).not.toHaveBeenCalled();
+    }
   });
   it.each(["TECHNICIAN", "ACCOUNTANT"] as const)("does not allow %s to bypass lead permissions", (role) => {
     expect(hasPermission(role, "leads.read")).toBe(false);

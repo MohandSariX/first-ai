@@ -20,6 +20,8 @@ const leadAId = randomUUID();
 const leadBId = randomUUID();
 const serviceAId = randomUUID();
 const serviceBId = randomUUID();
+const quoteAId = randomUUID(), quoteBId = randomUUID(), itemAId = randomUUID(), itemBId = randomUUID();
+const jobAId = randomUUID(), jobBId = randomUUID(), unassignedJobAId = randomUUID(), reportAId = randomUUID(), reportBId = randomUUID();
 const agentAId = randomUUID();
 const agentBId = randomUUID();
 const globalAgentId = randomUUID();
@@ -217,6 +219,23 @@ describe("local Supabase auth and tenant isolation", () => {
       ]),
     );
 
+    await requireSuccessfulOperation(adminClient.from("quotes").insert([
+      { id: quoteAId, organization_id: organizationAId, customer_id: customerAId, site_id: customerSiteAId, quote_number: "TEST-A", created_by_user_id: businessUserAId },
+      { id: quoteBId, organization_id: organizationBId, customer_id: customerBId, site_id: customerSiteBId, quote_number: "TEST-B", created_by_user_id: businessUserBId },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("quote_items").insert([
+      { id: itemAId, organization_id: organizationAId, quote_id: quoteAId, service_id: serviceAId, description: "Fictional Item A", quantity: "1", unit_price: "100", tax_rate: "20" },
+      { id: itemBId, organization_id: organizationBId, quote_id: quoteBId, service_id: serviceBId, description: "Fictional Item B", quantity: "1", unit_price: "100", tax_rate: "20" },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("jobs").insert([
+      { id: jobAId, organization_id: organizationAId, customer_id: customerAId, site_id: customerSiteAId, service_id: serviceAId, quote_id: quoteAId, assigned_user_id: businessUserAId, created_by_user_id: businessUserAId, description: "Fictional Job A" },
+      { id: unassignedJobAId, organization_id: organizationAId, customer_id: customerAId, site_id: customerSiteAId, service_id: serviceAId, created_by_user_id: businessUserAId, description: "Fictional unassigned Job A" },
+      { id: jobBId, organization_id: organizationBId, customer_id: customerBId, site_id: customerSiteBId, service_id: serviceBId, quote_id: quoteBId, created_by_user_id: businessUserBId, description: "Fictional Job B" },
+    ]));
+    await requireSuccessfulOperation(adminClient.from("job_reports").insert([
+      { id: reportAId, organization_id: organizationAId, job_id: jobAId, technician_id: businessUserAId },
+      { id: reportBId, organization_id: organizationBId, job_id: jobBId, technician_id: businessUserBId },
+    ]));
     await requireSuccessfulOperation(adminClient.from("agents").insert([
       { id: agentAId, organization_id: organizationAId, code: "director", name: "Director", version: "v1" },
       { id: agentBId, organization_id: organizationBId, code: "director", name: "Director", version: "v1" },
@@ -265,6 +284,10 @@ describe("local Supabase auth and tenant isolation", () => {
     await requireSuccessfulOperation(adminClient.from("agent_runs").delete().in("id", [runAId, runBId, otherUserRunId]));
     await requireSuccessfulOperation(adminClient.from("agents").delete().in("id", [agentAId, agentBId, globalAgentId]));
     await requireSuccessfulOperation(adminClient.from("leads").delete().in("id", [leadAId, leadBId]));
+    await requireSuccessfulOperation(adminClient.from("job_reports").delete().in("id", [reportAId, reportBId]));
+    await requireSuccessfulOperation(adminClient.from("jobs").delete().in("id", [jobAId, jobBId, unassignedJobAId]));
+    await requireSuccessfulOperation(adminClient.from("quote_items").delete().in("id", [itemAId, itemBId]));
+    await requireSuccessfulOperation(adminClient.from("quotes").delete().in("id", [quoteAId, quoteBId]));
     await requireSuccessfulOperation(adminClient.from("services").delete().in("id", [serviceAId, serviceBId]));
 
     await requireSuccessfulOperation(
@@ -325,6 +348,27 @@ describe("local Supabase auth and tenant isolation", () => {
       organizationId: organizationBId,
       role: "OWNER",
     });
+  });
+
+  it("isolates operational records, including exact UUID attacks and anonymous reads", async () => {
+    for (const [table, ownA, ownB] of [["quotes", quoteAId, quoteBId], ["quote_items", itemAId, itemBId], ["jobs", jobAId, jobBId], ["job_reports", reportAId, reportBId]] as const) {
+      for (const [client, own, foreign] of [[userAClient, ownA, ownB], [userBClient, ownB, ownA]] as const) {
+        const ownRead = await client.from(table).select("id").eq("id", own); expect(ownRead.error).toBeNull(); expect(ownRead.data).toEqual([{ id: own }]);
+        const attack = await client.from(table).select("id").eq("id", foreign).maybeSingle(); expect(attack.error).toBeNull(); expect(attack.data).toBeNull();
+        const list = await client.from(table).select("id"); expect(list.error).toBeNull(); expect(list.data?.map(row => row.id)).not.toContain(foreign);
+      }
+      const anonymous = await anonymousClient.from(table).select("id"); expect(anonymous.error).toBeNull(); expect(anonymous.data).toEqual([]);
+      const control = await adminClient!.from(table).select("id").in("id", [ownA, ownB]); expect(control.error).toBeNull(); expect(control.data).toHaveLength(2);
+    }
+  });
+  it("enforces technician assignment and denies direct authenticated operational writes", async () => {
+    await requireSuccessfulOperation(adminClient!.from("users").update({ role: "TECHNICIAN" }).eq("id", businessUserAId));
+    try {
+      const assigned = await userAClient.from("jobs").select("id"); expect(assigned.error).toBeNull(); expect(assigned.data).toEqual([{ id: jobAId }]);
+      const unassigned = await userAClient.from("jobs").select("id").eq("id", unassignedJobAId); expect(unassigned.error).toBeNull(); expect(unassigned.data).toEqual([]);
+      for (const table of ["quotes", "quote_items"] as const) { const denied = await userAClient.from(table).select("id"); expect(denied.error).toBeNull(); expect(denied.data).toEqual([]); }
+      const deniedWrite = await userAClient.from("job_reports").update({ observations: "Unauthorized direct write" }).eq("id", reportAId).select(); expect(deniedWrite.error).toBeNull(); expect(deniedWrite.data).toEqual([]);
+    } finally { await requireSuccessfulOperation(adminClient!.from("users").update({ role: "OWNER" }).eq("id", businessUserAId)); }
   });
 
   it("isolates runtime settings reads and writes even by known organization UUID", async () => {

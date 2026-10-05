@@ -28,9 +28,17 @@ export default async function globalSetup() {
   // Keep deterministic E2E off both live AI providers. Missing-key checks use cloud-only.
   const settingsResult = await admin.from("ai_settings").insert({ organization_id: organizationId, mode: "CLOUD_ONLY" });
   if (settingsResult.error !== null) throw new Error(settingsResult.error.message);
+  const customerId = randomUUID();
+  const operationalFixtures = [
+    admin.from("customers").insert({ id: customerId, organization_id: organizationId, name: e2eFixture.operationalCustomerName, type: "company" }),
+    admin.from("services").insert({ organization_id: organizationId, code: "E2E-TERRAIN", name: e2eFixture.serviceName, pricing_mode: "fixed", base_price: "100" }),
+  ];
+  for (const operation of operationalFixtures) { const result = await operation; if (result.error) throw new Error(result.error.message); }
+  const siteFixture = await admin.from("customer_sites").insert({ organization_id: organizationId, customer_id: customerId, name: "Site Terrain Fictif", address_line1: "1 Rue du Test", postal_code: "75001", city: "Paris" });
+  if (siteFixture.error) throw new Error(siteFixture.error.message);
 
   return async () => {
-    for (const table of ["agent_tool_calls", "agent_runs", "agents", "ai_settings"]) {
+    for (const table of ["job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
       const cleanup = await admin.from(table).delete().eq("organization_id", organizationId);
       if (cleanup.error !== null) throw new Error(cleanup.error.message);
     }

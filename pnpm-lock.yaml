@@ -433,6 +433,9 @@ importers:
       '@eslint/js':
         specifier: 9.39.5
         version: 9.39.5
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(postgres@3.4.9)
       eslint:
         specifier: 9.39.5
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)

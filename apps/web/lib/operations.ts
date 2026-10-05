@@ -1,0 +1,14 @@
+import { hasPermission, type CurrentBusinessUser } from "@first-ai/auth";
+import { JOB_PRIORITIES, JOB_STATUSES, INFESTATION_LEVELS, QUOTE_STATUSES } from "@first-ai/schemas";
+import type { OperationalField } from "../components/operational-form";
+export const quoteLabels: Record<typeof QUOTE_STATUSES[number], string> = { draft: "Brouillon", ready: "Prêt", sent: "Envoyé", viewed: "Consulté", accepted: "Accepté", rejected: "Refusé", expired: "Expiré", cancelled: "Annulé" };
+export const jobLabels: Record<typeof JOB_STATUSES[number], string> = { draft: "Brouillon", scheduled: "Planifiée", confirmed: "Confirmée", en_route: "En route", in_progress: "En cours", completed: "Terminée", follow_up_required: "Suivi nécessaire", cancelled: "Annulée", failed: "Échec" };
+export const priorityLabels: Record<typeof JOB_PRIORITIES[number], string> = { low: "Basse", normal: "Normale", high: "Haute", urgent: "Urgente" };
+export const infestationLabels: Record<typeof INFESTATION_LEVELS[number], string> = { unknown: "Inconnu", low: "Faible", medium: "Moyen", high: "Fort", critical: "Critique" };
+export const options = (labels: Record<string, string>) => Object.entries(labels).map(([value, label]) => ({ value, label }));
+export function operationalCapabilities(user: CurrentBusinessUser, job?: { assignedUserId: string | null }) { return { quoteWrite: hasPermission(user.role, "quotes.write"), quoteAccept: hasPermission(user.role, "quotes.accept"), jobWrite: hasPermission(user.role, "jobs.write"), schedule: hasPermission(user.role, "jobs.schedule"), execute: hasPermission(user.role, "jobs.execute") && (user.role !== "TECHNICIAN" || job?.assignedUserId === user.userId), reportWrite: hasPermission(user.role, "job_reports.write") && (user.role !== "TECHNICIAN" || job?.assignedUserId === user.userId) }; }
+export function quoteItemFields(services: { id: string; name: string }[], item?: { serviceId: string | null; description: string; quantity: string; unitPrice: string; taxRate: string; costEstimate: string; sortOrder: number }): OperationalField[] { return [
+  { name: "serviceId", label: "Prestation", type: "select", value: item?.serviceId ?? "", options: services.map(s => ({ value: s.id, label: s.name })) }, { name: "description", label: "Description", required: true, value: item?.description },
+  { name: "quantity", label: "Quantité", required: true, value: item?.quantity ?? "1" }, { name: "unitPrice", label: "Prix unitaire HT (€)", required: true, value: item?.unitPrice },
+  { name: "taxRate", label: "TVA (%)", required: true, value: item?.taxRate, help: "Taux explicite pour cette ligne." }, { name: "costEstimate", label: "Coût estimé unitaire (€)", required: true, value: item?.costEstimate ?? "0" }, { name: "sortOrder", label: "Ordre", value: String(item?.sortOrder ?? 0) },
+]; }

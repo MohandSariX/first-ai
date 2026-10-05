@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -42,6 +43,7 @@ export const customerSites = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
+    unique("customer_sites_id_customer_org_unique").on(table.id, table.customerId, table.organizationId),
     index("customer_sites_customer_id_idx").on(table.customerId),
     index("customer_sites_postal_code_idx").on(table.postalCode),
     index("customer_sites_city_idx").on(table.city),

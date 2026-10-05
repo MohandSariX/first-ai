@@ -1,7 +1,7 @@
 import { AiSettingsService, DirectorError, OllamaProvider, OpenAIProvider, runDirector } from "@first-ai/agents/server";
 import { AgentObservabilityRepository, AiSettingsRepository } from "@first-ai/database";
 import { directorChatInputSchema } from "@first-ai/schemas";
-import { createCrmSummaryTools, createCrmToolRegistry } from "@first-ai/tools";
+import { createCrmSummaryTools, createCrmToolRegistry, createOperationalToolRegistry } from "@first-ai/tools";
 import { NextResponse } from "next/server";
 
 import { getBusinessUser } from "../../../lib/auth";
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   let crm: Awaited<ReturnType<typeof createCrm>> | undefined;
   try {
     crm = await createCrm(user);
-    const registry = { ...createCrmToolRegistry(crm), ...createCrmSummaryTools(crm.dashboard, crm.leadSummary) };
+    const registry = { ...createCrmToolRegistry(crm), ...createCrmSummaryTools(crm.dashboard, crm.leadSummary), ...createOperationalToolRegistry(crm) };
     const settings = await new AiSettingsService(new AiSettingsRepository(crm.database)).get(user);
     const result = await runDirector(parsed.data, user, {
       registry, store: new AgentObservabilityRepository(crm.database),

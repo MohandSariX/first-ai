@@ -1,2 +1,6 @@
 export * from "./crm-services.js";
 export * from "./crm-tools.js";
+export * from "./operational-services.js";
+export * from "./quote-calculation.js";
+export * from "./operational-policies.js";
+export * from "./operational-tools.js";

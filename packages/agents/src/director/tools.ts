@@ -13,6 +13,7 @@ export const DIRECTOR_TOOL_ALLOWLIST = [
   "services.get", "services.search", "services.listActive",
   "customers.countActive", "leads.countOpen", "leads.countNew",
   "leads.recentNew", "services.countActive",
+  "quotes.get", "quotes.search", "jobs.get", "jobs.search", "jobs.getToday", "jobReports.get",
 ] as const;
 
 // Strict function schemas require nullable optional fields, without Zod defaults.

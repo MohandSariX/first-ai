@@ -6,6 +6,8 @@ export const navigationItems = [
   { href: "/customers", label: "Clients", short: "Clients", icon: "◎", permission: "customers.read" },
   { href: "/leads", label: "Prospects", short: "Prospects", icon: "◇", permission: "leads.read" },
   { href: "/services", label: "Prestations", short: "Services", icon: "▦", permission: "services.read" },
+  { href: "/quotes", label: "Devis", short: "Devis", icon: "▤", permission: "quotes.read" },
+  { href: "/jobs", label: "Interventions", short: "Terrain", icon: "◷", permission: "jobs.read" },
 ] as const;
 
 export function getNavigationItems(role: UserRole) {

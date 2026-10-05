@@ -13,6 +13,9 @@ export const PERMISSIONS = [
   "leads.write",
   "services.read",
   "services.write",
+  "quotes.read", "quotes.write", "quotes.accept",
+  "jobs.read", "jobs.write", "jobs.schedule", "jobs.execute",
+  "job_reports.read", "job_reports.write",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -23,9 +26,9 @@ export const ROLE_PERMISSIONS: Readonly<
   OWNER: PERMISSIONS,
   ADMIN: PERMISSIONS,
   MANAGER: PERMISSIONS,
-  TECHNICIAN: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read"],
-  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read"],
-  READ_ONLY: ["organizations.read", "users.read", "customers.read", "contacts.read", "sites.read", "leads.read", "services.read"],
+  TECHNICIAN: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "jobs.read", "jobs.execute", "job_reports.read", "job_reports.write"],
+  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "quotes.read", "jobs.read"],
+  READ_ONLY: ["organizations.read", "users.read", "customers.read", "contacts.read", "sites.read", "leads.read", "services.read", "quotes.read", "jobs.read", "job_reports.read"],
 };
 
 export function hasPermission(

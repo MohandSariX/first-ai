@@ -7,6 +7,7 @@ import {
   CustomerSiteRepository,
   LeadRepository,
   ServiceRepository,
+  OperationalStore,
 } from "@first-ai/database";
 import {
   ContactService,
@@ -16,6 +17,7 @@ import {
   LeadService,
   LeadSummaryService,
   ServiceCatalogService,
+  QuoteService, JobService, JobReportService,
 } from "@first-ai/tools";
 
 import { requireBusinessUser } from "./auth";
@@ -34,6 +36,7 @@ export async function createCrm(providedContext?: CurrentBusinessUser) {
   const sitesRepository = new CustomerSiteRepository(database);
   const leadsRepository = new LeadRepository(database);
   const servicesRepository = new ServiceRepository(database);
+  const operationalStore = new OperationalStore(database);
   return {
     context,
     database,
@@ -44,5 +47,8 @@ export async function createCrm(providedContext?: CurrentBusinessUser) {
     catalog: new ServiceCatalogService(servicesRepository),
     dashboard: new CrmDashboardService(customersRepository, leadsRepository, servicesRepository),
     leadSummary: new LeadSummaryService(leadsRepository),
+    quotes: new QuoteService(operationalStore),
+    jobs: new JobService(operationalStore),
+    reports: new JobReportService(operationalStore),
   };
 }

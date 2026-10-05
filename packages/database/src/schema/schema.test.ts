@@ -15,6 +15,7 @@ import {
   organizations,
   services,
   users,
+  quotes, quoteItems, jobs, jobReports, quoteStatusEnum, jobStatusEnum, infestationLevelEnum,
 } from "./index.js";
 
 describe("database schema exports", () => {
@@ -31,6 +32,7 @@ describe("database schema exports", () => {
       getTableName(agentRuns),
       getTableName(agentToolCalls),
       getTableName(aiSettings),
+      getTableName(quotes), getTableName(quoteItems), getTableName(jobs), getTableName(jobReports),
     ]).toEqual([
       "organizations",
       "users",
@@ -43,6 +45,7 @@ describe("database schema exports", () => {
       "agent_runs",
       "agent_tool_calls",
       "ai_settings",
+      "quotes", "quote_items", "jobs", "job_reports",
     ]);
   });
 
@@ -57,9 +60,16 @@ describe("database schema exports", () => {
     expect(agentToolCalls.organizationId.notNull).toBe(true);
     expect(agents.organizationId.notNull).toBe(false);
     expect(aiSettings.organizationId.notNull).toBe(true);
+    for (const table of [quotes, quoteItems, jobs, jobReports]) expect(table.organizationId.notNull).toBe(true);
   });
   it("exports bounded model profiles and observable run outcomes", () => {
     expect(modelProfileEnum.enumValues).toEqual(["FAST", "STANDARD", "REASONING", "LOCAL_FAST", "LOCAL_STANDARD", "CLOUD_STANDARD", "CLOUD_REASONING"]);
     expect(agentRunStatusEnum.enumValues).toEqual(["queued", "running", "waiting_approval", "completed", "failed", "cancelled", "timeout", "budget_exceeded"]);
+  });
+  it("exports operational enums and exact monetary storage", () => {
+    expect(quoteStatusEnum.enumValues).toEqual(["draft", "ready", "sent", "viewed", "accepted", "rejected", "expired", "cancelled"]);
+    expect(jobStatusEnum.enumValues).toContain("follow_up_required");
+    expect(infestationLevelEnum.enumValues).toEqual(["unknown", "low", "medium", "high", "critical"]);
+    expect(quotes.total.dataType).toBe("string"); expect(quoteItems.unitPrice.dataType).toBe("string"); expect(jobs.price.dataType).toBe("string");
   });
 });

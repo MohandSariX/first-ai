@@ -6,4 +6,6 @@ export const e2eFixture = {
   password: `Local-Crm-${runId}`,
   organizationName: `Organisation CRM Test ${runId}`,
   customerName: `Acme Hygiène Test ${runId}`,
+  operationalCustomerName: `Client Opérations Test ${runId}`,
+  serviceName: `Prestation Terrain Test ${runId}`,
 };

@@ -1,7 +1,7 @@
 import { ollamaBaseUrlSchema } from "@first-ai/schemas";
 import { z } from "zod";
 import { DIRECTOR_CONFIG } from "../director/config.js";
-import { DIRECTOR_INSTRUCTIONS } from "../director/instructions.js";
+import { currentDirectorInstructions } from "../director/instructions.js";
 import { DirectorError, type DirectorExecution } from "../types.js";
 import type { AiProvider } from "./provider.js";
 
@@ -59,7 +59,7 @@ export class OllamaProvider implements AiProvider {
       signal.throwIfAborted();
       if (discovery.status !== "available") throw new DirectorError("OLLAMA_UNAVAILABLE", "Ollama indisponible.");
       if (!discovery.models.includes(input.model)) throw new DirectorError("OLLAMA_MODEL_MISSING", "Le modèle local sélectionné n’est pas installé.");
-      const messages: Message[] = [{ role: "system", content: DIRECTOR_INSTRUCTIONS }, { role: "user", content: input.message }];
+      const messages: Message[] = [{ role: "system", content: currentDirectorInstructions() }, { role: "user", content: input.message }];
       const tools = input.tools.map((entry) => ({ type: "function", function: { name: entry.name, description: entry.description, parameters: z.toJSONSchema(entry.parameters) } }));
       let inputs = 0, outputs = 0;
       for (let turn = 1; turn <= (input.maxIterations ?? DIRECTOR_CONFIG.maxIterations); turn++) {

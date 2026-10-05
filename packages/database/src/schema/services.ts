@@ -32,6 +32,7 @@ export const services = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
+    unique("services_id_org_unique").on(table.id, table.organizationId),
     index("services_organization_id_idx").on(table.organizationId),
     index("services_category_idx").on(table.category),
     index("services_active_idx").on(table.active),

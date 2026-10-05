@@ -13,7 +13,7 @@
     "lint": "pnpm --recursive --if-present lint",
     "typecheck": "pnpm --recursive --if-present typecheck",
     "test": "pnpm --recursive --if-present test",
-    "test:integration": "pnpm --filter @first-ai/database test:integration && pnpm --filter @first-ai/auth test:integration",
+    "test:integration": "pnpm --filter @first-ai/database test:integration && pnpm --filter @first-ai/auth test:integration && dotenv -e .env.local -- pnpm --filter @first-ai/tools test:integration",
     "test:e2e": "dotenv -e .env.local -- playwright test",
     "test:ollama": "dotenv -e .env.local -- pnpm --filter @first-ai/agents test:ollama",
     "db:generate": "pnpm --filter @first-ai/database db:generate",

@@ -16,3 +16,4 @@ export { services } from "./services.js";
 export { users } from "./users.js";
 export * from "./agent-observability.js";
 export { aiSettings } from "./ai-settings.js";
+export * from "./operations.js";

@@ -11,6 +11,10 @@ server context and reuse CRM services (including role checks) and scoped reposit
 The SDK names encode dots as underscores; persisted tool names retain domain.action.
 
 Only Risk 0 read permissions are registered; restricted roles receive no lead tools.
+The operational milestone adds quote, job and report reads only. Technicians receive
+no quote tools, and job services restrict them to assigned interventions; accountants
+receive no report tools. Neither hybrid provider receives create/accept/schedule/complete
+tools. See [operational foundation](../architecture/quotes-jobs.md) for these boundaries.
 Aggregate tools use database counts, not paginated result lengths. Search is bounded
 to 20 records; results and strings are bounded and redacted. Tool results remain
 untrusted data, never system instructions. No CRM writes or handoffs are possible.

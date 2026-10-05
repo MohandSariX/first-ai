@@ -12,8 +12,12 @@ const expectedTables = [
   "contacts",
   "customer_sites",
   "customers",
+  "job_reports",
+  "jobs",
   "leads",
   "organizations",
+  "quote_items",
+  "quotes",
   "services",
   "users",
 ];
@@ -25,10 +29,14 @@ const expectedEnums = [
   "customer_risk_level",
   "customer_status",
   "customer_type",
+  "infestation_level",
+  "job_priority",
+  "job_status",
   "lead_source",
   "lead_status",
   "model_profile",
   "pricing_mode",
+  "quote_status",
   "user_role",
 ];
 
@@ -143,7 +151,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 6 }]);
+    expect(result).toEqual([{ migrationCount: 7 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {
