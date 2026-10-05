@@ -5,16 +5,17 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun chantier produit en cours. Fondation de mémoire documentaire établie ;
-  maintenir les quatre fichiers après chaque jalon.
+- Aucun chantier produit en cours. Durcissement sécurité terminé ; maintenir
+  la mémoire du projet après chaque jalon.
 
 ## NEXT
 
-1. Cadrer le jalon spécialistes/approvals ; traiter explicitement les gaps membership
-   actif et lead RBAC/RLS avant d'élargir les accès ou l'autonomie.
+1. Cadrer le jalon spécialistes/approvals sans élargir prématurément les accès
+   ou l'autonomie ; garder Director v1 read-only.
 2. Définir contrats versionnés, permissions/outils/budgets et evals des spécialistes.
-3. Arrêter la politique d'approbation Risk 1+, puis implémenter validation humaine,
-   expiration, revalidation et exécution idempotente sans auto-approbation.
+3. Implémenter la politique Risk 1+ acceptée : validation humaine explicite,
+   expiration, revalidation du membership/tenant/droits et exécution déterministe
+   idempotente sans auto-approbation.
 4. Livrer progressivement Pricing Agent, Planning Agent, Technician Agent sur les
    services existants, en mode supervisé. Director v1 reste read-only.
 

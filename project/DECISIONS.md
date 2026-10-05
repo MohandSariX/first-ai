@@ -51,13 +51,18 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 
 ## ADR-06 — Défense en profondeur, sans supposer la parité de toutes les policies
 
-- **Statut :** adopté, implémenté avec limites recensées dans CURRENT_STATE.
+- **Statut :** adopté, implémenté ; durcissement membership/prospects en migration 0007.
 - **Décision :** RLS + scoping explicite des queries privilégiées + permissions des
   services + contraintes PostgreSQL complémentaires.
 - **Raison :** la connexion Drizzle peut contourner RLS ; le frontend n'est pas une barrière.
-- **Conséquence :** ne pas assimiler RLS tenant-only à un RBAC complet : notamment leads.
-  Contrôles de statut actif du membership à compléter ; writes métier passent par services.
-- **Sources :** `SECURITY.md`, `packages/auth/src/permissions.ts`, migrations et repositories.
+- **Conséquence :** contexte serveur et helper RLS exigent user/organisation actifs
+  et non supprimés. Leads SELECT autorise OWNER/ADMIN/MANAGER/READ_ONLY, avec la
+  même matrice que le service. Le lookup de rôle lit users sous RLS ; son helper
+  SECURITY DEFINER est sans argument, search_path vide, réservé à authenticated,
+  donc sans récursion ni choix arbitraire de tenant. Ne pas supposer un RBAC universel
+  sur toutes les tables ; writes métier passent toujours par services.
+- **Sources :** `SECURITY.md` §§3/7, `packages/auth/src/current-user.ts`,
+  `packages/auth/src/permissions.ts`, `packages/database/drizzle/0007_security_hardening.sql`.
 
 ## ADR-07 — Tool → service → repository
 
@@ -114,17 +119,21 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Conséquence :** coût par unité ; ratio sur revenu, null à revenu nul. Pas de coût réel ni pricing intelligent supposé.
 - **Sources :** `packages/tools/src/quote-calculation.ts`, `docs/architecture/quotes-jobs.md`.
 
-## ADR-13 — Approbation humaine : principe établi, extension Risk 1+ non tranchée
+## ADR-13 — Toute mutation IA Risk 1+ exige une approbation humaine
 
-- **Statut :** principes adoptés dans les références ; système à implémenter.
-- **Décision :** actions sensibles Risk 3/4 soumises à validation humaine selon les
-  références sécurité ; un agent ne s'approuve jamais. Director v1 ne reçoit aucun Risk 1+.
+- **Statut :** accepté ; politique établie, workflow persistant non implémenté.
+- **Décision :** Risk 0 lecture/analyse peut s'exécuter directement avec autorisation.
+  Toute mutation/action IA Risk 1+ exige l'approbation explicite d'un humain autorisé
+  avant exécution, sur une action allowlistée déterministe et ses paramètres précis.
+  Aucune auto-approbation, approbation générique ou simple instruction de chat.
 - **Raison :** séparer proposition IA, autorité humaine et exécution autorisée.
-- **Conséquence :** aucune table/service/UI d'approval actuellement. `TOOLS.md` permet
-  Risk 1/2 selon autonomie : une obligation universelle d'approbation de toute mutation
-  IA Risk 1+ n'est donc **pas** une décision déjà établie. La politique du prochain
-  jalon doit être explicitement arrêtée avant d'exposer des outils d'écriture à un spécialiste.
-- **Sources :** `SECURITY.md` §§12–13, `TOOLS.md` §§5/57/68, `AGENTS.md` §§34/143, allowlist Director.
+- **Conséquence :** revalidation du membership, des permissions, du tenant et des
+  invariants métier à l'exécution ; aucun droit supplémentaire accordé par approval.
+  Jamais de code/SQL/shell ou exécution arbitraire générés par modèle. Workflow futur
+  traçable, expirant et protégé contre double exécution. Tant qu'il est absent, IA
+  read-only : Director inchangé, aucun spécialiste ni table/service/UI d'approval.
+  Remplace les possibilités d'autonomie Risk 1/2 précédemment envisagées dans TOOLS.
+- **Sources :** `SECURITY.md` §13, `TOOLS.md` §5, `AGENTS.md` §§34/143, allowlist Director.
 
 ## ADR-14 — Traces utiles, pas de chaîne de pensée persistée
 

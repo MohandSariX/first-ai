@@ -54,6 +54,13 @@ Mais il ne doit jamais contourner :
 
 L’authentification utilisateur doit utiliser Supabase Auth.
 
+Une identité Auth valide ne suffit pas : le contexte métier exige un `public.users`
+avec `status = active` et `deleted_at IS NULL`, lié à une organisation elle-même
+active et non supprimée. Tout autre statut est refusé. Le serveur vérifie ces
+conditions explicitement ; le helper RLS `public.current_organization_id()` les
+applique aussi, même si la session/JWT Auth reste valide. Aucun scope envoyé par
+le navigateur ne fait autorité.
+
 À terme, activer :
 - email + mot de passe ;
 - MFA / 2FA ;
@@ -148,6 +155,12 @@ Objectif :
 empêcher l’accès cross-organization même en cas d’erreur applicative.
 
 Les politiques doivent être testées.
+
+Pour les prospects, les lectures directes Supabase suivent `leads.read` :
+OWNER, ADMIN, MANAGER et READ_ONLY uniquement, dans leur organisation active.
+TECHNICIAN et ACCOUNTANT sont refusés, y compris par UUID exact ou agrégation.
+Les services conservent leurs contrôles de permissions et les repositories leur
+scoping explicite : une connexion privilégiée peut contourner RLS.
 
 ---
 
@@ -268,7 +281,30 @@ Exemples :
 
 ## 13. Approval System
 
-Les actions Risk 3 et Risk 4 passent par :
+Politique acceptée pour les actions **initiées par IA**, quel que soit le provider
+ou le niveau d'autonomie :
+
+- Risk 0, lecture/analyse sans mutation ni effet externe : exécution directe
+  possible avec permissions, tenant, validation et budgets autorisés.
+- Toute mutation/action Risk 1+ : approbation humaine explicite **avant** exécution,
+  même pour une note ou un brouillon. Une instruction initiale de chat, un prompt,
+  un flag d'autonomie ou une approbation générique ne vaut pas validation de l'action.
+- L'humain autorisé valide l'action déterministe allowlistée et ses paramètres
+  précis dans le tenant concerné. Un agent ne peut jamais s'auto-approuver.
+- À l'exécution, revérifier membership actif, permissions, tenant, inputs et
+  invariants du service métier. L'approbation n'accorde aucun droit supplémentaire
+  et n'autorise jamais du code/SQL/shell ou des tools arbitraires générés par modèle.
+- La validation doit être traçable, liée à la proposition et non réutilisable pour
+  une autre action ; prévoir expiration et protection contre double exécution.
+
+Cette règle minimale prévaut sur les anciennes possibilités d'autonomie Risk 1/2
+décrites dans la vision des tools. Les actions manuelles humaines restent soumises
+à leurs permissions/invariants et aux validations sensibles Risk 3/4 existantes.
+
+Le workflow persistant n'est pas encore implémenté : tant qu'il ne l'est pas,
+ne pas exposer de mutation IA. Director v1 reste uniquement Risk 0, sans spécialiste.
+
+Le futur workflow de ces actions utilise :
 
 `approval_requests`
 

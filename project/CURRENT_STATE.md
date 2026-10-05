@@ -27,10 +27,16 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
   Une identité correspond à un utilisateur métier et une organisation.
 - Le serveur résout `{ authUserId, userId, organizationId, role }` depuis la session
   et le membership, jamais depuis un formulaire, une URL ou des arguments LLM.
+  Il exige explicitement user et organisation `status = active`, non soft-deleted ;
+  les autres statuts sont refusés, indépendamment de la validité de la session Auth.
 - RLS isole les tenants ; `public.current_organization_id()` utilise `auth.uid()`
   et `public.users`, avec SECURITY DEFINER, search_path vide et exécution réservée
   à authenticated. Les repositories Drizzle privilégiés filtrent explicitement le tenant.
   Les FK composites empêchent les références inter-organisations importantes.
+  Le helper exige aussi membership/organisation actifs et non supprimés : révocation
+  des lectures tenant même avec JWT encore valide. Leads RLS suit `leads.read` :
+  OWNER/ADMIN/MANAGER/READ_ONLY ; TECHNICIAN/ACCOUNTANT ne lisent aucun prospect,
+  y compris par UUID connu. Les permissions des services restent obligatoires.
 - Services et outils appliquent la matrice de `packages/auth/src/permissions.ts` :
   OWNER/ADMIN/MANAGER lisent/écrivent CRM et opérations ; TECHNICIAN lit les données
   CRM opérationnelles, exécute ses interventions assignées et édite ses propres
@@ -49,10 +55,12 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 - Opérations : `quotes`, `quote_items`, `jobs`, `job_reports`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`.
 
-Sept migrations 0000–0006 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0006_amused_exiles.sql` (opérations, intégrité, indexes, RLS).
+Huit migrations 0000–0007 dans `packages/database/drizzle/`, seule source de migration
+applicative. Dernière : `0007_security_hardening.sql` (helper membership actif et
+policy prospects ; aucun changement de tables). Appliquée au Supabase local,
+second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
-CRM et devis/interventions. Le SQL des migrations porte aussi la sécurité initiale
+CRM et devis/interventions. Le SQL custom des migrations porte aussi la sécurité
 Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
 
 ## Capacités métier présentes
@@ -127,13 +135,15 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 
 ## Limitations et domaines différés
 
-- Le resolver de membership ne contrôle pas explicitement le statut actif du user
-  ou de l'organisation ; le helper SQL exclut les users soft-deleted, pas les inactifs.
-- Les policies RLS `leads` sont tenant-only : les restrictions TECHNICIAN/ACCOUNTANT
-  sont appliquées dans services/tools, pas dans les lectures directes Supabase de prospects.
-  Ne pas présenter cette protection applicative comme une parité RBAC complète en DB.
 - Pas d'approvals persistées/exécutables ; les colonnes/statuts d'approbation des traces
-  sont des réservations. Pas de politique universelle d'approbation Risk 1+ établie.
+  sont des réservations. Politique acceptée : Risk 0 autorisé peut s'exécuter directement,
+  toute mutation/action IA Risk 1+ exige une approbation humaine explicite préalable,
+  sans contourner permissions, tenant ni invariants. Exécution déterministe allowlistée
+  uniquement ; aucune mutation IA exposée tant que le workflow n'existe pas.
+- La parité RBAC/RLS n'est pas un catalogue universel : hors restrictions spécifiques,
+  certaines policies restent tenant-only. Les services restent la frontière métier.
+  Un contexte privilégié déjà résolu n'est pas révoqué en cours d'exécution ; les
+  futures actions différées devront revérifier le membership au moment d'agir.
 - Références opportunities/contracts/pest_types/employees/documents temporairement
   omises ; assignment et auteur de rapport référencent des users, pas des employés.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
@@ -152,8 +162,11 @@ atomicité) ; trois scénarios Playwright CRM, Assistant/settings et devis → j
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Ce jalon Markdown ne réexécute pas ces suites et ne
-certifie pas leur état live ; validation limitée à la cohérence documentaire/Git.
+`supabase:start/stop/status`. Validation du durcissement au 2026-10-05 :
+`lint`, `typecheck`, 127 tests unitaires et 41 tests d'intégration locale passent.
+Les nouveaux tests vérifient les statuts/soft-delete, la révocation avec session valide
+sur les 15 tables et la parité des six rôles pour listes/UUID/counts de prospects.
+Build, E2E et providers live non réexécutés pour ce jalon ciblé ; pas de validation production.
 
 Prochain jalon ciblé, non implémenté : fondation des agents spécialisés + système
 d'approbation humaine, puis Pricing Agent, Planning Agent et Technician Agent.

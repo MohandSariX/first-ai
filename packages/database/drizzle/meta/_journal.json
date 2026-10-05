@@ -50,6 +50,13 @@
       "when": 1791158341217,
       "tag": "0006_amused_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791205363055,
+      "tag": "0007_security_hardening",
+      "breakpoints": true
     }
   ]
 }

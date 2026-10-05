@@ -117,6 +117,13 @@ interface ToolResult<T> {
 
 ## 5. Niveaux de risque
 
+Pour toute action initiée par IA, la politique de `SECURITY.md` §13 prévaut :
+Risk 0 peut s'exécuter avec les droits nécessaires ; toute mutation/action Risk 1+
+exige une approbation humaine explicite avant exécution. Les possibilités futures
+d'autonomie décrites ailleurs ici ne constituent pas une exception. L'approbation
+ne contourne ni permissions, ni tenant, ni validation, ni invariants des services.
+Sans workflow d'approbation implémenté, aucun tool de mutation n'est exposé à l'IA.
+
 ### Risk 0 — Lecture
 
 Aucun impact métier direct.
@@ -141,7 +148,7 @@ Exemples :
 - préparer un brouillon ;
 - enregistrer une mémoire non critique.
 
-Peut être exécuté automatiquement selon le niveau d’autonomie de l’agent.
+Une mutation initiée par IA exige une approbation humaine explicite avant exécution.
 
 ---
 
@@ -154,13 +161,13 @@ Exemples :
 - créer un rappel ;
 - envoyer une demande d’avis.
 
-Peut être exécuté automatiquement uniquement si l’agent dispose du niveau d’autonomie approprié.
+Une action initiée par IA exige une approbation humaine explicite avant exécution.
 
 ---
 
 ### Risk 3 — Sensible
 
-Validation humaine requise selon les politiques configurées.
+Validation humaine explicite requise ; les politiques peuvent ajouter des contrôles plus stricts.
 
 Exemples :
 - envoyer un devis important ;

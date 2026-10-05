@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createAdminSupabaseClient } from "./admin.js";
 import { resolveCurrentBusinessUser } from "./current-user.js";
+import { hasPermission } from "./permissions.js";
 
 const organizationAId = randomUUID();
 const organizationBId = randomUUID();
@@ -349,6 +350,76 @@ describe("local Supabase auth and tenant isolation", () => {
       role: "OWNER",
     });
   });
+
+  it.each([
+    ["users", { status: "inactive" }],
+    ["users", { status: "suspended" }],
+    ["users", { status: "unknown-status" }],
+    ["users", { deleted_at: "2026-01-01T00:00:00Z" }],
+    ["organizations", { status: "inactive" }],
+    ["organizations", { deleted_at: "2026-01-01T00:00:00Z" }],
+  ] as const)("revokes context and tenant access with a still-valid session: %s %j", async (table, change) => {
+    const targetId = table === "users" ? businessUserAId : organizationAId;
+    await requireSuccessfulOperation(adminClient!.from(table).update(change).eq("id", targetId));
+    try {
+      const identity = await userAClient.auth.getUser();
+      expect(identity.error).toBeNull();
+      expect(identity.data.user?.id).toBe(authUserAId);
+      await expect(resolveCurrentBusinessUser(userAClient)).rejects.toThrow("No active First AI user");
+      const tenant = await userAClient.rpc("current_organization_id");
+      expect(tenant.error).toBeNull();
+      expect(tenant.data).toBeNull();
+
+      for (const [businessTable, ownId, column] of [
+        ["organizations", organizationAId, "id"], ["users", businessUserAId, "id"],
+        ["customers", customerAId, "id"], ["contacts", contactAId, "id"],
+        ["customer_sites", customerSiteAId, "id"], ["leads", leadAId, "id"],
+        ["services", serviceAId, "id"], ["quotes", quoteAId, "id"],
+        ["quote_items", itemAId, "id"], ["jobs", jobAId, "id"],
+        ["job_reports", reportAId, "id"], ["agents", agentAId, "id"],
+        ["agent_runs", runAId, "id"], ["agent_tool_calls", callAId, "id"],
+        ["ai_settings", organizationAId, "organization_id"],
+      ] as const) {
+        const list = await userAClient.from(businessTable).select(column);
+        expect(list.error).toBeNull(); expect(list.data).toEqual([]);
+        const directId = await userAClient.from(businessTable).select(column).eq(column, ownId).maybeSingle();
+        expect(directId.error).toBeNull(); expect(directId.data).toBeNull();
+      }
+      const deniedWrite = await userAClient.from("ai_settings")
+        .update({ mode: "CLOUD_ONLY" }).eq("organization_id", organizationAId).select();
+      expect(deniedWrite.error).toBeNull(); expect(deniedWrite.data).toEqual([]);
+      // Positive controls: rows still exist and the other tenant remains active.
+      const control = await adminClient!.from("leads").select("id").eq("id", leadAId);
+      expect(control.error).toBeNull(); expect(control.data).toEqual([{ id: leadAId }]);
+      await expect(resolveCurrentBusinessUser(userBClient)).resolves.toMatchObject({ organizationId: organizationBId });
+    } finally {
+      await requireSuccessfulOperation(adminClient!.from(table).update({ status: "active", deleted_at: null }).eq("id", targetId));
+    }
+    await expect(resolveCurrentBusinessUser(userAClient)).resolves.toMatchObject({ organizationId: organizationAId });
+    await expect(visibleIds(userAClient, "leads")).resolves.toEqual([leadAId]);
+  });
+
+  it.each(["OWNER", "ADMIN", "MANAGER", "READ_ONLY", "TECHNICIAN", "ACCOUNTANT"] as const)(
+    "matches direct lead RLS to %s service permissions, including known IDs", async (role) => {
+      await requireSuccessfulOperation(adminClient!.from("users").update({ role }).eq("id", businessUserAId));
+      try {
+        await expect(resolveCurrentBusinessUser(userAClient)).resolves.toMatchObject({ role });
+        const allowed = hasPermission(role, "leads.read");
+        const list = await userAClient.from("leads").select("id");
+        expect(list.error).toBeNull(); expect(list.data).toEqual(allowed ? [{ id: leadAId }] : []);
+        const knownId = await userAClient.from("leads").select("id").eq("id", leadAId).maybeSingle();
+        expect(knownId.error).toBeNull(); expect(knownId.data).toEqual(allowed ? { id: leadAId } : null);
+        const foreignId = await userAClient.from("leads").select("id").eq("id", leadBId).maybeSingle();
+        expect(foreignId.error).toBeNull(); expect(foreignId.data).toBeNull();
+        const count = await userAClient.from("leads").select("id", { count: "exact", head: true });
+        expect(count.error).toBeNull(); expect(count.count).toBe(allowed ? 1 : 0);
+        const control = await adminClient!.from("leads").select("id").in("id", [leadAId, leadBId]);
+        expect(control.error).toBeNull(); expect(control.data).toHaveLength(2);
+      } finally {
+        await requireSuccessfulOperation(adminClient!.from("users").update({ role: "OWNER" }).eq("id", businessUserAId));
+      }
+    },
+  );
 
   it("isolates operational records, including exact UUID attacks and anonymous reads", async () => {
     for (const [table, ownA, ownB] of [["quotes", quoteAId, quoteBId], ["quote_items", itemAId, itemBId], ["jobs", jobAId, jobBId], ["job_reports", reportAId, reportBId]] as const) {

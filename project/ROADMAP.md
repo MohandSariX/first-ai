@@ -15,17 +15,19 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
 - Devis/lignes/calculs exacts/numérotation, acceptation transactionnelle vers un job,
   planification/affectation, rapports terrain et UI mobile avec tests opérationnels.
 - Mémoire de projet documentaire : snapshot, roadmap, décisions, tâches et maintenance AGENTS.
+- Durcissement sécurité : membership user/organisation actif et non supprimé,
+  RLS prospects alignée aux rôles de lecture, tests de révocation et politique
+  acceptée d'approbation humaine obligatoire pour toute mutation/action IA Risk 1+.
 
 ## CURRENT
 
 Prochain jalon ciblé : **fondation des agents spécialisés + approbation humaine +
 Pricing Agent + Planning Agent + Technician Agent**. Cadrage, pas encore livré.
 
-- Vérifier/traiter les gaps de membership actif et de parité RBAC/RLS signalés dans CURRENT_STATE.
 - Définir contrats versionnés, contextes minimaux, allowlists et budgets des spécialistes.
 - Construire un workflow humain explicite : proposition, décision autorisée, expiration,
   revalidation avant exécution, audit et protection contre double exécution/auto-approbation.
-  Trancher la politique Risk 1+ avant toute exposition d'écriture IA.
+  Appliquer la politique Risk 1+ acceptée ; aucune exposition d'écriture IA avant ce workflow.
 - Pricing : recommandation et préparation supervisée, calculs déterministes réutilisés.
 - Planning : proposition et exécution supervisée, sans prétendre disposer de données RH/trajectoires absentes.
 - Technician : interventions assignées et préparation supervisée de rapports terrain.
