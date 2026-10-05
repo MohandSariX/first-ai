@@ -85,6 +85,13 @@
       "when": 1791211708049,
       "tag": "0011_salty_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791215184714,
+      "tag": "0012_flawless_havok",
+      "breakpoints": true
     }
   ]
 }

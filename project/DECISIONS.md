@@ -202,3 +202,18 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   sous verrou. Toute administration privilégiée doit préserver le service, pas éditer
   directement les snapshots. Les statuts bancaires et crédits non alloués sont différés.
 - **Sources :** `docs/architecture/payments.md`, PaymentService/PaymentRepository, migration 0011.
+
+## ADR-20 — Corps de facture immuable, copie PDF et paiements actuels séparés
+
+- **Statut :** adopté, implémenté v1 technique.
+- **Décision :** capturer un snapshot JSONB versionné dans la transaction d’émission,
+  depuis les identités réelles et calculs exacts. Protéger snapshot/champs commerciaux
+  SQL ; générer le PDF local à la demande, sans cache objet ni bytes DB. Un encart
+  séparé affiche les encaissements actuels déclaratifs, jamais une modification du corps.
+- **Raison :** un changement CRM ne doit pas réécrire une facture ; les paiements
+  évoluent indépendamment, avec une source structurée et un solde cohérent.
+- **Conséquences :** aucun backfill des factures historiques ; vendeur incomplet
+  bloque l’émission. Adresse client absente explicitement signalée, pas substituée
+  par un site. PDF français WinAnsi, refus de glyphes incompatibles. Conformité fiscale,
+  adresses client, corrections/avoirs, rétention/audit et e-invoicing restent différés.
+- **Sources :** `docs/architecture/invoice-documents.md`, InvoiceService, migration 0012.

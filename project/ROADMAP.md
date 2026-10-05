@@ -24,17 +24,22 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
   permissions/RLS, services et UI manuelle brouillon/émission, sans paiements ni IA write.
 - Suivi manuel des paiements : encaissements partiels/complets, soldes/statuts exacts,
   idempotence, protection trop-perçu/concurrence, corrections tracées, RLS et UI mobile.
+- Document facture : snapshot immuable à l’émission, PDF serveur à la demande,
+  TVA multi-taux, encart paiements actualisé, téléchargement sécurisé et tests.
+  Fondation technique uniquement, sans certification fiscale.
 
 ## CURRENT
 
-Suivi manuel des paiements livré et validé localement ; aucun chantier produit actif.
+Fondation document/PDF facture livrée ; aucun chantier produit actif.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
 
 ## NEXT
 
-- Cadrer facturation partielle/source, corrections après émission et exigences fiscales
-  avant PDF/envoi ou utilisation en production ; ne pas supposer leur implémentation.
+- **FISCAL / INVOICE COMPLIANCE** : champs obligatoires/adresse facturation client,
+  numérotation/chronologie, corrections/avoirs, TVA/mentions, rétention, facturation
+  électronique française et immutabilité/audit production, avant usage fiscal réel.
+- Cadrer facturation partielle/source et configuration du profil vendeur en UI.
 - Consolider evals et scénarios métier des spécialistes, sans accroître automatiquement l'autonomie.
 - Examiner rétention, contrôle d'abus et inbox des approvals avant usage production.
 - Compléter audit/événements et consultation des traces selon les besoins effectivement introduits.
@@ -44,7 +49,7 @@ envoi, rapprochement ou élargissement du registre IA dans ce jalon.
 
 ## LATER
 
-- Extension facturation/PDF/envoi, pré-comptabilité/finance/rapprochement,
+- Extension facturation/envoi, pré-comptabilité/finance/rapprochement,
   puis Qonto **lecture seule** ; aucun prélèvement/Stripe/relance automatique livré.
 - Contrats, stocks/produits/fournisseurs, documents/signatures, RH/conformité et domaines CRM avancés.
 - Autres spécialistes commerciaux/qualité/finance/croissance, activation progressive.

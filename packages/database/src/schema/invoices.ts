@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { check, date, foreignKey, index, integer, numeric, pgEnum, pgPolicy, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
-import { INVOICE_STATUSES } from "@first-ai/schemas";
+import { check, date, foreignKey, index, integer, jsonb, numeric, pgEnum, pgPolicy, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import { INVOICE_STATUSES, type InvoiceDocumentSnapshot } from "@first-ai/schemas";
 import { organizations } from "./organizations.js";
 import { customers } from "./customers.js";
 import { quotes, jobs } from "./operations.js";
@@ -19,6 +19,7 @@ export const invoices = pgTable("invoices", {
   issueDate: date("issue_date").notNull(), dueDate: date("due_date").notNull(), issuedAt: timestamp("issued_at", { withTimezone: true }),
   subtotal: amount("subtotal").notNull().default("0"), taxAmount: amount("tax_amount").notNull().default("0"), total: amount("total").notNull().default("0"),
   amountPaid: amount("amount_paid").notNull().default("0"), amountDue: amount("amount_due").notNull().default("0"), paidAt: timestamp("paid_at", { withTimezone: true }),
+  documentSnapshot: jsonb("document_snapshot").$type<InvoiceDocumentSnapshot>(),
   notes: text("notes"), internalNotes: text("internal_notes"), createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"),
   ...timestamps(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, t => [

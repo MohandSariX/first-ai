@@ -22,7 +22,7 @@ describe("local invoice foundation", () => {
     for (let n = 0; n < 2; n++) {
       const email = `invoice-${orgs[n]}@example.test`, password = `Fictional-${randomUUID()}`;
       const result = await admin.auth.admin.createUser({ email, password, email_confirm: true }); if (result.error) throw result.error; authIds.push(result.data.user.id);
-      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}` });
+      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}`, legalName: `Fictional seller ${n}`, addressLine1: "1 Rue Fictive", postalCode: "75001", city: "Paris" });
       await db.insert(users).values({ id: userIds[n]!, organizationId: orgs[n]!, authUserId: authIds[n]!, firstName: "Fictional", lastName: "Invoice owner", email, role: "OWNER" });
       await db.insert(customers).values({ id: customerIds[n]!, organizationId: orgs[n]!, type: "company", name: `Fictional invoice customer ${n}` });
       const site = randomUUID(), catalog = randomUUID(), quote = randomUUID(), job = randomUUID();
@@ -124,6 +124,64 @@ describe("local invoice foundation", () => {
     await service.addInvoiceItem(contexts[n]!, invoice.id, { description: "Fictional payment line", quantity: "1", unitPrice: amount, taxRate: "0" });
     return service.issueInvoice(contexts[n]!, invoice.id);
   }
+  it("atomically captures available billing identities and freezes issued document data", async () => {
+    const invoice = await issued(), c = contexts[0]!, before = await service.getInvoiceDocument(c, invoice.id);
+    expect(before.snapshot).toMatchObject({ organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: null }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
+    try {
+      await db.update(customers).set({ name: "Changed customer", legalName: "Changed legal identity" }).where(eq(customers.id, customerIds[0]!));
+      await db.update(organizations).set({ legalName: "Changed seller", addressLine1: "Changed address" }).where(eq(organizations.id, orgs[0]!));
+      expect((await service.getInvoiceDocument(c, invoice.id)).snapshot).toEqual(before.snapshot);
+      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toEqual(before.snapshot);
+      await expect(db.update(invoices).set({ documentSnapshot: { ...before.snapshot, seller: { ...before.snapshot.seller, name: "Changed" } } }).where(eq(invoices.id, invoice.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(invoices).set({ notes: "Changed issued note" }).where(eq(invoices.id, invoice.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      const item = (await service.getInvoice(c, invoice.id)).items[0]!;
+      await expect(service.updateInvoiceItem(c, invoice.id, item.id, { unitPrice: "1" })).rejects.toMatchObject({ code: "CONFLICT" });
+      await expect(service.removeInvoiceItem(c, invoice.id, item.id)).rejects.toMatchObject({ code: "CONFLICT" });
+      await paymentService.recordPayment(c, invoice.id, receipt("40"));
+      const updated = await service.getInvoiceDocument(c, invoice.id);
+      expect(updated.snapshot).toEqual(before.snapshot); expect(updated.payment).toMatchObject({ amountPaid: "40.00", amountDue: "60.00", status: "partially_paid" });
+    } finally {
+      await db.update(customers).set({ name: "Fictional invoice customer 0", legalName: null }).where(eq(customers.id, customerIds[0]!));
+      await db.update(organizations).set({ legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }).where(eq(organizations.id, orgs[0]!));
+    }
+  });
+  it("rolls back issue if snapshot validation or persistence fails", async () => {
+    const invoice = await service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!));
+    await service.addInvoiceItem(contexts[0]!, invoice.id, { description: "Rollback", quantity: "1", unitPrice: "10", taxRate: "20" });
+    try {
+      await db.update(organizations).set({ currency: "USD" }).where(eq(organizations.id, orgs[0]!));
+      await expect(service.issueInvoice(contexts[0]!, invoice.id)).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(await service.getInvoice(contexts[0]!, invoice.id)).toMatchObject({ status: "draft", issuedAt: null, documentSnapshot: null });
+    } finally { await db.update(organizations).set({ currency: "EUR" }).where(eq(organizations.id, orgs[0]!)); }
+    try {
+      await db.update(organizations).set({ addressLine1: null }).where(eq(organizations.id, orgs[0]!));
+      await expect(service.issueInvoice(contexts[0]!, invoice.id)).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(await service.getInvoice(contexts[0]!, invoice.id)).toMatchObject({ status: "draft", documentSnapshot: null, issuedAt: null });
+    } finally { await db.update(organizations).set({ addressLine1: "1 Rue Fictive" }).where(eq(organizations.id, orgs[0]!)); }
+    const failing = new InvoiceService({ ...store, invoices: store.invoices, customer: store.customer.bind(store), service: store.service.bind(store), quotes: store.quotes, jobs: store.jobs, timezone: store.timezone.bind(store), transaction: fn => store.transaction(async s => { s.invoices.update = async () => { throw new Error("Snapshot persistence failure"); }; return fn(s); }) });
+    await expect(failing.issueInvoice(contexts[0]!, invoice.id)).rejects.toThrow("Snapshot persistence failure");
+    expect(await service.getInvoice(contexts[0]!, invoice.id)).toMatchObject({ status: "draft", issuedAt: null, documentSnapshot: null });
+  });
+  it("denies known foreign document UUIDs and revalidates membership/role before download", async () => {
+    const a = await issued(), b = await issued(1), c = contexts[0]!;
+    await expect(service.getInvoiceDocument(c, b.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.getInvoiceDocument(contexts[1]!, a.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    try {
+      for (const patch of [{ role: "TECHNICIAN" as const }, { role: "OWNER" as const, status: "inactive" }, { status: "active", deletedAt: new Date() }]) {
+        await db.update(users).set(patch).where(eq(users.id, c.userId));
+        await expect(service.getInvoiceDocument(c, a.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+      await db.update(users).set({ role: "READ_ONLY", status: "active", deletedAt: null }).where(eq(users.id, c.userId));
+      expect((await service.getInvoiceDocument({ ...c, role: "READ_ONLY" }, a.id)).snapshot.invoiceId).toBe(a.id);
+    } finally { await db.update(users).set({ role: "OWNER", status: "active", deletedAt: null }).where(eq(users.id, c.userId)); }
+  });
+  it("does not silently backfill legacy issued invoices or issue without a snapshot", async () => {
+    const legacy = (await db.insert(invoices).values({ organizationId: orgs[0]!, createdByUserId: userIds[0]!, ...draft(customerIds[0]!), invoiceNumber: "LEGACY-FICTIONAL", status: "issued", issuedAt: new Date() }).returning())[0]!;
+    await expect(service.getInvoiceDocument(contexts[0]!, legacy.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await service.issueInvoice(contexts[0]!, legacy.id)).documentSnapshot).toBeNull();
+    const next = await service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!));
+    await expect(db.update(invoices).set({ status: "issued", issuedAt: new Date() }).where(eq(invoices.id, next.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
   it("records partial then full payment atomically and replays the same request exactly once", async () => {
     const invoice = await issued(), input = receipt("40"), c = contexts[0]!;
     const results = await Promise.all([paymentService.recordPayment(c, invoice.id, input), paymentService.recordPayment(c, invoice.id, input)]);

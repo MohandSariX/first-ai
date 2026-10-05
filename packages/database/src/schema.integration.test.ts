@@ -159,7 +159,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 12 }]);
+    expect(result).toEqual([{ migrationCount: 13 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

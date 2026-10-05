@@ -1,5 +1,9 @@
 # Invoice foundation
 
+Document/PDF delivery now builds on this foundation:
+[immutable invoice documents](invoice-documents.md). Issue captures a versioned
+snapshot atomically; PDF remains a technical, not fiscally certified, document.
+
 ## Scope and data
 
 `invoices` and `invoice_items` are the only new tables in
@@ -10,8 +14,9 @@ follow existing conventions. Invoice items carry organization_id for composite
 parent/service integrity. Parent references restrict deletion; dependent items
 alone cascade on controlled fixture/administrative invoice deletion.
 
-Contract links, delivery/sent_at, accounting references,
-PDFs and credit notes are deliberately absent. Payment snapshots and manual receipts
+Contract links, delivery/sent_at, accounting references and credit notes remain
+deferred. Technical PDFs now use [immutable documents](invoice-documents.md).
+Payment snapshots and manual receipts
 are now implemented separately in [payment tracking](payments.md). Item totals are derived,
 not redundantly stored; invoice totals are transactional snapshots.
 
@@ -78,4 +83,4 @@ known IDs, anonymous/service-role controls, revoked membership, tenant FKs, conc
 numbering/issue, rollback and source state revalidation. Playwright covers mobile manual
 draft → line edit → issue and cleans invoices before their parent resources.
 Normal tests require no Supabase/provider. Production audit, fiscal validation,
-banking/reconciliation, PDF/email, exports and Billing Agent remain separate milestones.
+banking/reconciliation, email, exports and Billing Agent remain separate milestones.

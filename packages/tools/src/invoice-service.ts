@@ -1,10 +1,11 @@
 import { hasPermission, type CurrentBusinessUser, type Permission } from "@first-ai/auth";
 import type { Invoice, InvoiceScope, InvoiceStoreInterface } from "@first-ai/database";
-import { addInvoiceItemSchema, createDraftInvoiceSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
+import { addInvoiceItemSchema, createDraftInvoiceSchema, invoiceDocumentSnapshotSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
 import { z } from "zod";
 import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
 import { calculateQuoteTotals } from "./quote-calculation.js";
+import { createInvoiceDocumentSnapshot, invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 
 export function calculateInvoiceTotals(items: readonly { quantity: string; unitPrice: string; taxRate: string }[]) {
   if (items.length > 200) throw new OperationalConflictError("Maximum 200 lignes par facture.");
@@ -40,6 +41,37 @@ export class InvoiceService {
   async updateInvoiceItem(c: CurrentBusinessUser, id: string, itemId: string, input: unknown) { authorize(c, "invoices.write"); const parsed = updateInvoiceItemSchema.parse(input), sc = scope(c, id); z.uuid().parse(itemId); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); if (parsed.serviceId && !await s.service(c.organizationId, parsed.serviceId)) throw new ResourceNotFoundError("Prestation active introuvable."); const item = found(await s.invoices.updateItem(sc, itemId, parsed)); await this.persist(s, sc); return item; }); }
   async removeInvoiceItem(c: CurrentBusinessUser, id: string, itemId: string) { authorize(c, "invoices.write"); const sc = scope(c, id); z.uuid().parse(itemId); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); const item = found(await s.invoices.removeItem(sc, itemId)); await this.persist(s, sc); return item; }); }
   async calculateInvoice(c: CurrentBusinessUser, id: string) { return calculateInvoiceTotals((await this.getInvoice(c, id)).items); }
-  async issueInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.issue"); const sc = scope(c, id); return this.store.transaction(async s => { const invoice = found(await s.invoices.get(sc, true)); if (invoice.status === "issued") return invoice; assertInvoiceIssuable(invoice.status, (await s.invoices.items(sc)).length); await this.validateLinks(s, c, invoice); await this.persist(s, sc); return found(await s.invoices.update(sc, { status: "issued", issuedAt: new Date() })); }); }
+  async issueInvoice(c: CurrentBusinessUser, id: string) {
+    authorize(c, "invoices.issue"); const sc = scope(c, id);
+    return this.store.transaction(async s => {
+      const membership = await s.membership(c);
+      if (!membership) throw new AuthorizationError("Adhésion inactive.");
+      authorize({ ...c, role: membership.role }, "invoices.issue");
+      const invoice = found(await s.invoices.get(sc, true));
+      if (invoice.issuedAt && invoice.documentSnapshot) return invoice; // Retry must not recapture mutable identities.
+      if (invoice.status === "issued") return invoice; // Legacy issued invoice: no invented historical backfill.
+      const items = await s.invoices.items(sc);
+      assertInvoiceIssuable(invoice.status, items.length);
+      await this.validateLinks(s, c, invoice);
+      const issuedAt = new Date();
+      const documentSnapshot = createInvoiceDocumentSnapshot(invoice, items, await s.billingIdentity(sc, invoice.customerId), issuedAt);
+      if (!invoiceDocumentAvailability(documentSnapshot).available) throw new OperationalConflictError("Émission impossible : configurez le nom, l’adresse, le code postal, la ville et le pays du vendeur avant l’émission.");
+      return found(await s.invoices.update(sc, { ...documentSnapshot.totals, amountDue: documentSnapshot.totals.total, status: "issued", issuedAt, documentSnapshot }));
+    });
+  }
+  async getInvoiceDocument(c: CurrentBusinessUser, id: string): Promise<InvoiceDocumentView> {
+    authorize(c, "invoices.read"); const sc = scope(c, id);
+    return this.store.transaction(async s => {
+      const membership = await s.membership(c);
+      if (!membership) throw new AuthorizationError("Adhésion inactive.");
+      authorize({ ...c, role: membership.role }, "invoices.read");
+      const invoice = found(await s.invoices.get(sc)); // One row contains the immutable body and coherent current balance.
+      const availability = invoiceDocumentAvailability(invoice.documentSnapshot);
+      if (!availability.available || !invoice.issuedAt || invoice.status === "draft") throw new OperationalConflictError(availability.message ?? "Une facture brouillon ne possède pas de document émis.");
+      const snapshot = invoiceDocumentSnapshotSchema.parse(invoice.documentSnapshot);
+      if (snapshot.organizationId !== c.organizationId || snapshot.invoiceId !== invoice.id) throw new OperationalConflictError("Document de facture invalide.");
+      return { snapshot, payment: { status: invoice.status, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, asOf: invoice.updatedAt.toISOString() } };
+    });
+  }
   async cancelInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.write"); const sc = scope(c, id); return this.store.transaction(async s => { assertInvoiceTransition(found(await s.invoices.get(sc, true)).status, "cancelled"); return found(await s.invoices.update(sc, { status: "cancelled" })); }); }
 }

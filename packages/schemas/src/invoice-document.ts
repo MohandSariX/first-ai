@@ -1,0 +1,32 @@
+import { z } from "zod";
+
+const nullableText = (max: number) => z.string().max(max).nullable();
+const money = z.string().regex(/^\d{1,12}\.\d{2}$/);
+const identity = z.strictObject({
+  name: z.string().min(1).max(255), legalName: nullableText(255),
+  addressLine1: nullableText(255), addressLine2: nullableText(255),
+  postalCode: nullableText(20), city: nullableText(120), country: nullableText(2),
+  siret: nullableText(14), vatNumber: nullableText(32),
+  email: nullableText(320), phone: nullableText(32),
+});
+
+// A versioned document DTO, not a live CRM record. No internal notes or secrets.
+export const invoiceDocumentSnapshotSchema = z.strictObject({
+  version: z.literal(1), organizationId: z.uuid(), invoiceId: z.uuid(),
+  capturedAt: z.iso.datetime(), currency: z.literal("EUR"),
+  seller: identity, customer: identity,
+  invoice: z.strictObject({
+    number: z.string().regex(/^FAC-\d{4}-\d{6}$/),
+    issueDate: z.iso.date(), dueDate: z.iso.date(), status: z.literal("issued"),
+    notes: nullableText(5000),
+  }),
+  lines: z.array(z.strictObject({
+    description: z.string().min(1).max(5000),
+    quantity: z.string().regex(/^\d{1,6}(\.\d{1,3})?$/),
+    unitPrice: money, taxRate: z.string().regex(/^\d{1,3}\.\d{3}$/),
+    subtotal: money, taxAmount: money, total: money,
+  })).min(1).max(200),
+  totals: z.strictObject({ subtotal: money, taxAmount: money, total: money }),
+  taxes: z.array(z.strictObject({ rate: z.string().regex(/^\d{1,3}\.\d{3}$/), base: money, amount: money })).min(1).max(200),
+});
+export type InvoiceDocumentSnapshot = z.infer<typeof invoiceDocumentSnapshotSchema>;

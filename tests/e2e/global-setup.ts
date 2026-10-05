@@ -21,7 +21,7 @@ export default async function globalSetup() {
   const authResult = await admin.auth.admin.createUser({ email: e2eFixture.email, password: e2eFixture.password, email_confirm: true });
   if (authResult.error !== null) throw new Error(authResult.error.message);
   const authUserId = authResult.data.user.id;
-  const organizationResult = await admin.from("organizations").insert({ id: organizationId, name: e2eFixture.organizationName });
+  const organizationResult = await admin.from("organizations").insert({ id: organizationId, name: e2eFixture.organizationName, legal_name: "Vendeur Fictif E2E", address_line1: "1 Rue Fictive", postal_code: "75001", city: "Paris" });
   if (organizationResult.error !== null) throw new Error(organizationResult.error.message);
   const userResult = await admin.from("users").insert({ id: businessUserId, organization_id: organizationId, auth_user_id: authUserId, first_name: "Utilisateur", last_name: "E2E", email: e2eFixture.email, role: "OWNER" });
   if (userResult.error !== null) throw new Error(userResult.error.message);

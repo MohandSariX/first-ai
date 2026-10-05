@@ -8,3 +8,4 @@ export * from "./approval-service.js";
 export * from "./invoice-service.js";
 export * from "./invoice-tools.js";
 export * from "./payment-service.js";
+export * from "./invoice-document.js";

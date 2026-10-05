@@ -58,9 +58,9 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 - Facturation : `invoices`, `invoice_items`, `payments`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Douze migrations 0000–0011 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0011_salty_namorita.sql`, payments, enums payment_method/status,
-soldes facture, contraintes/FK tenant-client, index et RLS héritée de la facture.
+Treize migrations 0000–0012 dans `packages/database/drizzle/`, seule source de migration
+applicative. Dernière : `0012_flawless_havok.sql`, snapshot document JSONB facture,
+trigger de capture obligatoire à l’émission et protection d’immutabilité commerciale.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
@@ -95,6 +95,14 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   terminée, client/tenant cohérents et états revalidés à l’émission. Pas de conversion
   automatique ni de règle supposée « une facture par source ». Détails :
   `docs/architecture/invoices.md`. Envoi/perte conservés dans l’enum sans opérations.
+- Document facture : snapshot Zod/versionné figé atomiquement à l’émission avec
+  identités vendeur/client, lignes, dates, numéro, notes client, totaux et TVA par taux.
+  Seller = champs organizations existants, nom/adresse/code postal/ville/pays requis
+  avant émission ; aucun identifiant inventé. PDFKit serveur génère à la demande
+  un vrai PDF français, indépendant du CRM live, avec encart d’encaissements actualisé
+  déclaratif/non vérifié par banque. Pas de stockage PDF ni IA. Download authentifié,
+  membership/rôle courants revérifiés ; READ_ONLY autorisé, TECHNICIAN refusé.
+  `docs/architecture/invoice-documents.md` décrit les limites fiscales explicites.
 - Paiements : saisie manuelle de fonds déjà reçus sur facture émise, NUMERIC/BigInt,
   encaissements partiels/complets, montant reçu/reste dû et statut dérivés. Verrou facture,
   clé anti-doublon, rejet trop-perçu ; paiement + solde dans une transaction. Rôle et
@@ -154,6 +162,8 @@ Cloud : sortie 1 500 tokens/tour. Aucune tarification monétaire inventée.
 Routes protégées : `/dashboard`, `/customers`, `/customers/[id]`, `/leads`, `/services`,
 `/quotes`, `/quotes/[id]`, `/jobs`, `/jobs/[id]`, `/assistant`, `/settings/ai`.
 Facturation protégée : `/invoices`, `/invoices/[id]`, dans le menu mobile secondaire.
+`GET /api/invoices/[id]/pdf` : invoices.read, lookup tenant, active membership,
+PDF attachment/no-store ; aucun document public ni preview brouillon.
 `/` redirige vers dashboard ; `/login` et `GET /api/health` sont publics.
 `POST /api/assistant` exige session, même origine et input Zod strict/borné.
 `GET/POST /api/assistant/proposals` liste les 20 dernières propositions propres et
@@ -180,12 +190,20 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 - La parité RBAC/RLS n'est pas un catalogue universel : hors restrictions spécifiques,
   certaines policies restent tenant-only. Les services restent la frontière métier.
   Un contexte privilégié déjà résolu n'est pas révoqué en cours d'exécution ; les
-  approbations différées et mutations paiements revérifient/verrouillent membership/organisation/rôle.
+  approbations différées, mutations paiements, émission et téléchargement facture
+  revérifient/verrouillent membership/organisation/rôle.
 - Références opportunities/contracts/pest_types/employees/documents temporairement
   omises ; assignment et auteur de rapport référencent des users, pas des employés.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
   photos/signatures, disponibilité RH/certifications, trajets ni coûts réels détaillés.
-- Facturation : pas encore de PDF/email/avoirs/export ou Billing Agent ;
+- Facturation : PDF technique disponible, **conformité fiscale non validée** ;
+  aucune adresse de facturation client dédiée : snapshot null et avertissement visible,
+  jamais adresse de site supposée. Profil vendeur administré hors UI dédiée.
+  Factures historiques sans snapshot non téléchargeables, sans backfill inventé.
+  Polices PDF WinAnsi/français ; glyphes non supportés refusés explicitement.
+  Snapshot/corps protégés SQL ; édition des lignes protégée par services, pas WORM
+  ni audit/rétention fiscale complet contre administration privilégiée.
+  Pas d’email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
   Numéros réservés dès le brouillon ; règles fiscales/mentions/chronologie/rétention
   à valider avant production. Aucun audit complet des mutations factures simulé.
@@ -210,16 +228,17 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation paiements au 2026-10-05 : lint,
-typecheck, build, 172 tests unitaires, 64 tests d’intégration locale et cinq E2E passent.
-Migration 0011 appliquée localement, second passage sûr via tracking.
-Cinq tests unitaires paiement et huit intégrations ajoutés ; E2E facture mobile étendu,
-sans appel réel aux providers IA.
+`supabase:start/stop/status`. Validation document/PDF au 2026-10-05 : lint,
+typecheck, build, 178 tests unitaires, 68 intégrations locales et six E2E passent.
+Migration 0012 appliquée localement, second passage sûr via tracking. Six tests
+unitaires document/PDF et quatre intégrations ajoutés ; E2E téléchargement/refus
+d’accès ajouté sans provider IA. PDFs courts/multipages rendus et vérifiés visuellement.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
 
-Prochain jalon : cadrer les règles de facturation source/corrections/conformité avant
-extension financière ; consolider evals/audit/protection des approvals sans autonomie accrue.
+Prochain jalon : **FISCAL / INVOICE COMPLIANCE**, champs obligatoires/adresse client,
+numérotation, corrections/avoirs, TVA/mentions, rétention, e-invoicing français et audit
+production ; consolider evals/protection des approvals sans autonomie accrue.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).
