@@ -113,7 +113,7 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 
 ## ADR-12 — Calculs monétaires déterministes hors LLM
 
-- **Statut :** adopté, implémenté pour devis/marges estimées.
+- **Statut :** adopté, implémenté pour devis/marges estimées, factures et soldes paiements.
 - **Décision :** NUMERIC et DTO décimaux, BigInt fixed-point, arrondi par ligne,
   TVA explicite par item et marge sur HT. Snapshots de totaux mis à jour dans la transaction des lignes.
 - **Raison :** résultats exacts, reproductibles et indépendants du provider.
@@ -189,3 +189,16 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   Rejet/expiry/failed requièrent une nouvelle proposition, aucun replay de mutation.
   Pas de notification, cross-user approver, inbox exhaustive ni audit/event général.
 - **Sources :** `packages/tools/src/approval-service.ts`, `packages/database/src/repositories/approvals.ts`, migration 0008.
+
+## ADR-19 — Encaissements manuels et soldes transactionnels
+
+- **Statut :** adopté, implémenté v1.
+- **Décision :** payments constitue la source des encaissements enregistrés ; soldes/statut
+  facture dérivés exactement sous verrou facture, avec mutation et snapshots dans une
+  transaction. Clé idempotente tenant ; correction tracée par annulation, sans suppression.
+- **Raison :** éviter doublons, trop-perçus concurrents et divergence paiement/solde.
+- **Conséquence :** seule une facture émise peut recevoir des fonds déjà reçus ; aucun
+  transfert/remboursement, rapprochement ou paiement IA. Membership/rôle actifs revérifiés
+  sous verrou. Toute administration privilégiée doit préserver le service, pas éditer
+  directement les snapshots. Les statuts bancaires et crédits non alloués sont différés.
+- **Sources :** `docs/architecture/payments.md`, PaymentService/PaymentRepository, migration 0011.

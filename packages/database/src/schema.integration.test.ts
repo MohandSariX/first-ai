@@ -19,6 +19,7 @@ const expectedTables = [
   "jobs",
   "leads",
   "organizations",
+  "payments",
   "quote_items",
   "quotes",
   "services",
@@ -40,6 +41,8 @@ const expectedEnums = [
   "lead_source",
   "lead_status",
   "model_profile",
+  "payment_method",
+  "payment_status",
   "pricing_mode",
   "quote_status",
   "user_role",
@@ -156,7 +159,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 11 }]);
+    expect(result).toEqual([{ migrationCount: 12 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

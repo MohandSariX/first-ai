@@ -19,3 +19,4 @@ export { aiSettings } from "./ai-settings.js";
 export * from "./operations.js";
 export * from "./approval-requests.js";
 export * from "./invoices.js";
+export * from "./payments.js";

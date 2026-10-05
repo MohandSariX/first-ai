@@ -5,7 +5,7 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun chantier produit actif. Fondation factures validée localement ; maintenir
+- Aucun chantier produit actif. Suivi manuel des paiements validé localement ; maintenir
   le snapshot après chaque jalon.
 
 ## NEXT

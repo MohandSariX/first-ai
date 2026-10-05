@@ -19,7 +19,7 @@ test("local mobile specialist proposals require human approval and execute once"
   const card=page.locator("article").filter({hasText:"Créer le devis fictif approuvé"});await expect(card).toBeVisible();await expect(card.getByText("pending",{exact:false})).toBeVisible();
   page.once("dialog",dialog=>dialog.accept());await card.getByRole("button",{name:"Approuver",exact:true}).click();await expect(card.getByRole("link",{name:"Action exécutée · Ouvrir la ressource"})).toBeVisible();
   const repeat=await page.request.post("/api/assistant/proposals",{headers:{Origin:new URL(page.url()).origin},data:{proposalId:first,decision:"approve"}});expect(repeat.status()).toBe(200);const receipt=await repeat.json();expect(receipt.proposal.status).toBe("executed");
-  const rejected=page.locator("article").filter({hasText:"Créer le devis fictif rejeté"});await rejected.getByRole("button",{name:"Rejeter",exact:true}).click();await expect(rejected.getByText("rejected",{exact:false})).toBeVisible();
+  const rejected=page.locator("article").filter({hasText:"Créer le devis fictif rejeté"});await rejected.getByRole("button",{name:"Rejeter",exact:true}).click();await expect(rejected.getByText(/· rejected$/)).toBeVisible();
   const denied=await page.request.post("/api/assistant/proposals",{headers:{Origin:new URL(page.url()).origin},data:{proposalId:second,decision:"approve"}});expect(denied.status()).toBe(409);
   const forged=await page.request.post("/api/assistant/proposals",{headers:{Origin:new URL(page.url()).origin},data:{proposalId:first,decision:"approve",organizationId:randomUUID()}});expect(forged.status()).toBe(400);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

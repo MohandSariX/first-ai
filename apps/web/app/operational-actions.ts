@@ -15,8 +15,10 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
     const input = parseOperationalForm(operation, form);
     const quoteId = formText(form, "quoteId"), jobId = formText(form, "jobId");
     const invoiceId = formText(form, "invoiceId");
-    await withCrm(async ({ context, quotes, jobs, reports, invoices }) => {
+    await withCrm(async ({ context, quotes, jobs, reports, invoices, payments }) => {
       switch (operation) {
+        case "payment.record": await payments.recordPayment(context, invoiceId, input); break;
+        case "payment.cancel": await payments.cancelPayment(context, invoiceId, formText(form, "paymentId"), input); break;
         case "invoice.create": destination = `/invoices/${(await invoices.createDraftInvoice(context, input)).id}`; break;
         case "invoice.addItem": await invoices.addInvoiceItem(context, invoiceId, input); break;
         case "invoice.updateItem": await invoices.updateInvoiceItem(context, invoiceId, formText(form, "itemId"), input); break;

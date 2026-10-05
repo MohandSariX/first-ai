@@ -10,8 +10,9 @@ follow existing conventions. Invoice items carry organization_id for composite
 parent/service integrity. Parent references restrict deletion; dependent items
 alone cascade on controlled fixture/administrative invoice deletion.
 
-Contract links, payment amounts/paid_at, delivery/sent_at, accounting references,
-PDFs, credit notes and payments are deliberately absent. Item totals are derived,
+Contract links, delivery/sent_at, accounting references,
+PDFs and credit notes are deliberately absent. Payment snapshots and manual receipts
+are now implemented separately in [payment tracking](payments.md). Item totals are derived,
 not redundantly stored; invoice totals are transactional snapshots.
 
 ## Numbering and calculations
@@ -37,7 +38,8 @@ written_off. Only draft → issued and draft → cancelled are exposed. Issue re
 at least one valid line, a current non-deleted customer and valid source links;
 it recomputes totals and records issued_at. Concurrent issue retries return the same
 issued record. Issued lines are immutable; issued cancellation is deliberately unavailable
-without the future correction workflow. No automatic overdue or payment transitions.
+without the future correction workflow. No automatic overdue transition. Payment
+states are derived transactionally by PaymentService, not arbitrary invoice updates.
 
 Creation is explicit and manual. Optional quote/job links must agree with the customer
 and tenant, and with each other when supplied together. Quotes must be accepted;
@@ -75,5 +77,5 @@ bounded schemas. Local-only integration fixtures verify actual authenticated RLS
 known IDs, anonymous/service-role controls, revoked membership, tenant FKs, concurrent
 numbering/issue, rollback and source state revalidation. Playwright covers mobile manual
 draft → line edit → issue and cleans invoices before their parent resources.
-Normal tests require no Supabase/provider. Production audit, fiscal validation, payment
-tracking, PDF/email, exports and Billing Agent remain separate milestones.
+Normal tests require no Supabase/provider. Production audit, fiscal validation,
+banking/reconciliation, PDF/email, exports and Billing Agent remain separate milestones.

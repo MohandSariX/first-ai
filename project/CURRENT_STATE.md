@@ -42,7 +42,7 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
   CRM opérationnelles, exécute ses interventions assignées et édite ses propres
   rapports brouillons, sans prospects/devis ; ACCOUNTANT lit CRM hors prospects,
   devis/interventions, sans rapports ni mutations CRM/opérationnelles ; il possède
-  cependant invoices.read/write/issue. TECHNICIAN n’accède pas aux factures ;
+  cependant invoices.read/write/issue et payments.read/write. TECHNICIAN n’accède ni aux factures ni aux paiements ;
   READ_ONLY consulte seulement.
 - Écritures métier via services côté serveur, sans policies SQL d'écriture
   authenticated. Exception : `ai_settings` autorise INSERT/UPDATE OWNER/ADMIN du tenant.
@@ -50,17 +50,17 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 
 ## Base actuelle
 
-18 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
+19 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
 
 - Identité/CRM : `organizations`, `users`, `customers`, `contacts`, `customer_sites`,
   `leads`, `services`.
 - Opérations : `quotes`, `quote_items`, `jobs`, `job_reports`.
-- Facturation : `invoices`, `invoice_items`.
+- Facturation : `invoices`, `invoice_items`, `payments`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Onze migrations 0000–0010 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0010_confused_photon.sql`, deux tables de facturation,
-enum invoice_status, contraintes/FK tenant-client, index et RLS de lecture par rôle.
+Douze migrations 0000–0011 dans `packages/database/drizzle/`, seule source de migration
+applicative. Dernière : `0011_salty_namorita.sql`, payments, enums payment_method/status,
+soldes facture, contraintes/FK tenant-client, index et RLS héritée de la facture.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
@@ -94,8 +94,13 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   Annulation de brouillon seulement. Liens facultatifs devis accepté/intervention
   terminée, client/tenant cohérents et états revalidés à l’émission. Pas de conversion
   automatique ni de règle supposée « une facture par source ». Détails :
-  `docs/architecture/invoices.md`. Statuts paiement/envoi conservés dans l’enum
-  du domaine mais sans opérations correspondantes.
+  `docs/architecture/invoices.md`. Envoi/perte conservés dans l’enum sans opérations.
+- Paiements : saisie manuelle de fonds déjà reçus sur facture émise, NUMERIC/BigInt,
+  encaissements partiels/complets, montant reçu/reste dû et statut dérivés. Verrou facture,
+  clé anti-doublon, rejet trop-perçu ; paiement + solde dans une transaction. Rôle et
+  membership/organisation actifs relus et verrouillés avant écriture. Annulation de saisie
+  avec motif/auteur/date sans suppression ni remboursement. UI paginée dans le détail
+  facture ; aucune intégration bancaire ni outil IA paiement. `docs/architecture/payments.md`.
 
 ## Director et IA hybride
 
@@ -175,18 +180,22 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 - La parité RBAC/RLS n'est pas un catalogue universel : hors restrictions spécifiques,
   certaines policies restent tenant-only. Les services restent la frontière métier.
   Un contexte privilégié déjà résolu n'est pas révoqué en cours d'exécution ; les
-  approbations différées revérifient et verrouillent membership/organisation/rôle.
+  approbations différées et mutations paiements revérifient/verrouillent membership/organisation/rôle.
 - Références opportunities/contracts/pest_types/employees/documents temporairement
   omises ; assignment et auteur de rapport référencent des users, pas des employés.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
   photos/signatures, disponibilité RH/certifications, trajets ni coûts réels détaillés.
-- Facturation : pas encore de PDF/email/paiements/avoirs/export ou Billing Agent ;
+- Facturation : pas encore de PDF/email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
   Numéros réservés dès le brouillon ; règles fiscales/mentions/chronologie/rétention
   à valider avant production. Aucun audit complet des mutations factures simulé.
   Outils invoices.get/search préparés Risk 0, non enregistrés avec les agents.
+  Paiements manuels seulement, sans preuve bancaire/rapprochement, crédit non alloué
+  ou remboursement. Les corrections peuvent remettre une facture à issued, sans
+  reconstruire un ancien statut d’envoi/retard. Writes SQL privilégiés hors services
+  peuvent contourner les invariants agrégés ; aucun audit complet simulé.
 - Hors implémentation : autres spécialistes, autonomie/queues, mémoire IA/conversations
-  persistées, audit_logs/domain_events/tasks, paiements/finance/Qonto,
+  persistées, audit_logs/domain_events/tasks, finance/Qonto/Stripe/prélèvements,
   contrats/stocks/achats/RH, knowledge/pricing intelligence, voix et offline/PWA.
   MFA et onboarding avancé restent différés ; performance live Ollama dépend du matériel.
 
@@ -196,16 +205,16 @@ Suites présentes : Vitest métier/calculs/permissions/routage/providers mockés
 intégration locale DB/Auth/services (RLS, UUID connus, FK, numérotation/concurrence,
 atomicité, approvals/concurrence/révocation/stale/conflicts, facturation/RLS/calculs) ;
 scénarios Playwright CRM, Assistant/settings, devis → job → rapport mobile,
-approbation mobile et brouillon → édition → émission de facture mobile.
+approbation mobile et brouillon → émission → encaissement partiel/complet/correction mobile.
 `pnpm test` ne nécessite aucun runtime externe ; `pnpm test:integration` et
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation factures au 2026-10-05 : lint,
-typecheck, build, 167 tests unitaires, 56 tests d’intégration locale et cinq E2E
-passent. Migration 0010 appliquée localement, second passage sûr via tracking.
-Six tests métier de facturation et un test d’émission ajoutés ; neuf intégrations
-factures et un E2E mobile, sans appel réel aux providers IA.
+`supabase:start/stop/status`. Validation paiements au 2026-10-05 : lint,
+typecheck, build, 172 tests unitaires, 64 tests d’intégration locale et cinq E2E passent.
+Migration 0011 appliquée localement, second passage sûr via tracking.
+Cinq tests unitaires paiement et huit intégrations ajoutés ; E2E facture mobile étendu,
+sans appel réel aux providers IA.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.

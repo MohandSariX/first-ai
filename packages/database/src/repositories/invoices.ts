@@ -34,7 +34,7 @@ export class InvoiceRepository {
     const sequence = previous ? Number(previous.number.slice(prefix.length)) + 1 : 1;
     return row((await this.db.insert(invoices).values({ ...input, organizationId, createdByUserId, invoiceNumber: invoiceNumber(year, sequence) }).returning())[0]);
   }
-  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "status" | "issuedAt" | "subtotal" | "taxAmount" | "total">>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
+  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "status" | "issuedAt" | "subtotal" | "taxAmount" | "total" | "amountPaid" | "amountDue" | "paidAt">>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
   async items(s: InvoiceScope) { return this.db.select().from(invoiceItems).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId))).orderBy(invoiceItems.sortOrder, invoiceItems.createdAt, invoiceItems.id).limit(201); }
   async addItem(s: InvoiceScope, input: Omit<typeof invoiceItems.$inferInsert, "id" | "organizationId" | "invoiceId" | "createdAt" | "updatedAt">) { return row((await this.db.insert(invoiceItems).values({ ...input, ...s }).returning())[0]); }
   async updateItem(s: InvoiceScope, itemId: string, input: Partial<Pick<InvoiceItem, "serviceId" | "description" | "quantity" | "unitPrice" | "taxRate" | "sortOrder">>) { return (await this.db.update(invoiceItems).set({ ...input, updatedAt: new Date() }).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId), eq(invoiceItems.id, itemId))).returning())[0]; }
@@ -46,7 +46,7 @@ export class InvoiceSession extends RepositorySession {
   constructor(db: Session, transactional = false) { super(db, transactional); this.invoices = new InvoiceRepository(db, transactional); }
   async customer(organizationId: string, customerId: string) { return (await this.db.select({ id: customers.id }).from(customers).where(and(eq(customers.organizationId, organizationId), eq(customers.id, customerId), isNull(customers.deletedAt))).limit(1)).length > 0; }
 }
-export interface InvoiceStoreInterface extends Pick<InvoiceSession, "invoices" | "customer" | "service" | "quotes" | "jobs"> {
+export interface InvoiceStoreInterface extends Pick<InvoiceSession, "invoices" | "customer" | "service" | "quotes" | "jobs" | "timezone"> {
   transaction<T>(fn: (s: InvoiceSession) => Promise<T>): Promise<T>;
 }
 export class InvoiceStore extends InvoiceSession implements InvoiceStoreInterface {

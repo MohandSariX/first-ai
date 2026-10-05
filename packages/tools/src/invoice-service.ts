@@ -11,7 +11,7 @@ export function calculateInvoiceTotals(items: readonly { quantity: string; unitP
   const { subtotal, taxAmount, total } = calculateQuoteTotals(items.map(item => ({ ...item, costEstimate: "0" })));
   return { subtotal, taxAmount, total };
 }
-// Only these transitions are executable in this foundation. Paid/sent statuses are compatibility vocabulary.
+// Manual invoice transitions only. PaymentService separately derives settlement states.
 export function assertInvoiceTransition(from: Invoice["status"], to: Invoice["status"]) {
   if (from !== "draft" || (to !== "issued" && to !== "cancelled")) throw new OperationalConflictError("Transition de facture non autorisée.");
 }
@@ -26,6 +26,7 @@ function draft(invoice: Invoice) { if (invoice.status !== "draft") throw new Ope
 
 export class InvoiceService {
   constructor(private readonly store: InvoiceStoreInterface) {}
+  async getTimezone(c: CurrentBusinessUser) { authorize(c, "invoices.read"); return this.store.timezone(c.organizationId); }
   async getInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.read"); const s = scope(c, id); return { ...found(await this.store.invoices.get(s)), items: await this.store.invoices.items(s) }; }
   async searchInvoices(c: CurrentBusinessUser, input: unknown) { authorize(c, "invoices.read"); return this.store.invoices.search({ ...searchInvoicesSchema.parse(input), organizationId: c.organizationId }); }
   private async validateLinks(s: Pick<InvoiceStoreInterface, "customer" | "quotes" | "jobs">, c: CurrentBusinessUser, invoice: { customerId: string; quoteId?: string | null; jobId?: string | null }) {
@@ -34,7 +35,7 @@ export class InvoiceService {
     if (invoice.jobId) { const job = found(await s.jobs.get({ organizationId: c.organizationId, jobId: invoice.jobId }, true)); if (job.customerId !== invoice.customerId || job.status !== "completed" || (invoice.quoteId && job.quoteId !== invoice.quoteId)) throw new OperationalConflictError("La source doit être une intervention terminée cohérente avec le client et le devis."); }
   }
   async createDraftInvoice(c: CurrentBusinessUser, input: unknown) { authorize(c, "invoices.write"); const parsed = createDraftInvoiceSchema.parse(input); return this.store.transaction(async s => { await this.validateLinks(s, c, parsed); return s.invoices.create(c.organizationId, c.userId, parsed); }); }
-  private async persist(s: Pick<InvoiceStoreInterface, "invoices">, sc: InvoiceScope) { return found(await s.invoices.update(sc, calculateInvoiceTotals(await s.invoices.items(sc)))); }
+  private async persist(s: Pick<InvoiceStoreInterface, "invoices">, sc: InvoiceScope) { const totals = calculateInvoiceTotals(await s.invoices.items(sc)); return found(await s.invoices.update(sc, { ...totals, amountDue: totals.total })); }
   async addInvoiceItem(c: CurrentBusinessUser, id: string, input: unknown) { authorize(c, "invoices.write"); const parsed = addInvoiceItemSchema.parse(input), sc = scope(c, id); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); if ((await s.invoices.items(sc)).length >= 200) throw new OperationalConflictError("Maximum 200 lignes par facture."); if (parsed.serviceId && !await s.service(c.organizationId, parsed.serviceId)) throw new ResourceNotFoundError("Prestation active introuvable."); const item = await s.invoices.addItem(sc, parsed); await this.persist(s, sc); return item; }); }
   async updateInvoiceItem(c: CurrentBusinessUser, id: string, itemId: string, input: unknown) { authorize(c, "invoices.write"); const parsed = updateInvoiceItemSchema.parse(input), sc = scope(c, id); z.uuid().parse(itemId); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); if (parsed.serviceId && !await s.service(c.organizationId, parsed.serviceId)) throw new ResourceNotFoundError("Prestation active introuvable."); const item = found(await s.invoices.updateItem(sc, itemId, parsed)); await this.persist(s, sc); return item; }); }
   async removeInvoiceItem(c: CurrentBusinessUser, id: string, itemId: string) { authorize(c, "invoices.write"); const sc = scope(c, id); z.uuid().parse(itemId); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); const item = found(await s.invoices.removeItem(sc, itemId)); await this.persist(s, sc); return item; }); }

@@ -22,12 +22,14 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
   propositions persistées, approbation humaine revalidée/idempotente et Assistant partagé.
 - Fondation factures/lignes : calculs exacts, numérotation serveur, liens tenant/client,
   permissions/RLS, services et UI manuelle brouillon/émission, sans paiements ni IA write.
+- Suivi manuel des paiements : encaissements partiels/complets, soldes/statuts exacts,
+  idempotence, protection trop-perçu/concurrence, corrections tracées, RLS et UI mobile.
 
 ## CURRENT
 
-Fondation factures livrée et validée localement ; aucun chantier produit actif.
-Spécialistes toujours supervisés et Director read-only. Aucun paiement, envoi ou
-élargissement du registre IA dans ce jalon.
+Suivi manuel des paiements livré et validé localement ; aucun chantier produit actif.
+Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
+envoi, rapprochement ou élargissement du registre IA dans ce jalon.
 
 ## NEXT
 
@@ -42,7 +44,8 @@ Spécialistes toujours supervisés et Director read-only. Aucun paiement, envoi 
 
 ## LATER
 
-- Extension facturation/PDF/envoi, paiements/pré-comptabilité/finance, puis Qonto **lecture seule**.
+- Extension facturation/PDF/envoi, pré-comptabilité/finance/rapprochement,
+  puis Qonto **lecture seule** ; aucun prélèvement/Stripe/relance automatique livré.
 - Contrats, stocks/produits/fournisseurs, documents/signatures, RH/conformité et domaines CRM avancés.
 - Autres spécialistes commerciaux/qualité/finance/croissance, activation progressive.
 - Worker/queues/outbox, notifications et autonomie supervisée mesurée, jamais sans limites.

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eFixture } from "./fixture";
 
-test("owner creates, edits and issues a fictional invoice on mobile", async ({ page }) => {
+test("owner issues an invoice and records partial/full fictional receipts on mobile", async ({ page }) => {
   await page.goto("/login"); await page.getByLabel("E-mail").fill(e2eFixture.email); await page.getByLabel("Mot de passe").fill(e2eFixture.password); await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page.getByRole("heading", { name: "Tableau de bord" })).toBeVisible();
   await page.goto("/invoices"); await page.getByText("Nouvelle facture", { exact: true }).click();
@@ -14,5 +14,16 @@ test("owner creates, edits and issues a fictional invoice on mobile", async ({ p
   const totals = page.getByRole("region", { name: "Totaux" }); await expect(totals).toContainText("240,24 €");
   await page.getByText("Modifier la ligne", { exact: true }).click(); const edit = page.getByRole("form", { name: "Enregistrer la ligne" }); await edit.getByLabel("Quantité").fill("3"); await edit.getByRole("button", { name: "Enregistrer la ligne" }).click(); await expect(totals).toContainText("360,36 €");
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click(); await expect(page.getByText("Émise", { exact: true })).toBeVisible(); await expect(page.getByRole("button", { name: "Ajouter la ligne" })).toHaveCount(0);
+  const receipt = page.getByRole("form", { name: "Enregistrer un paiement" });
+  await receipt.getByLabel("Montant reçu (€)").fill("100"); await receipt.getByLabel("Mode d’encaissement").selectOption("bank_transfer"); await receipt.getByLabel("Date de réception").fill("2026-01-01T12:00"); await receipt.getByLabel("Référence (facultative)").fill("Encaissement fictif E2E partiel"); await receipt.getByRole("button", { name: "Enregistrer l’encaissement" }).click();
+  await expect(page.getByText("Partiellement payée", { exact: true })).toBeVisible();
+  const balances = page.getByRole("region", { name: "Encaissements" }); await expect(balances).toContainText("Reste à payer : 260,36 €");
+  await receipt.getByLabel("Montant reçu (€)").fill("300"); await receipt.getByLabel("Mode d’encaissement").selectOption("cash"); await receipt.getByLabel("Date de réception").fill("2026-01-01T13:00"); await receipt.getByRole("button", { name: "Enregistrer l’encaissement" }).click();
+  await expect(receipt.getByRole("alert")).toContainText("dépasse le solde"); await expect(balances).toContainText("Reste à payer : 260,36 €");
+  await receipt.getByLabel("Montant reçu (€)").fill("260.36"); await receipt.getByLabel("Mode d’encaissement").selectOption("cash"); await receipt.getByLabel("Date de réception").fill("2026-01-01T13:00"); await receipt.getByRole("button", { name: "Enregistrer l’encaissement" }).click();
+  await expect(page.getByText("Payée", { exact: true })).toBeVisible(); await expect(balances).toContainText("Reste à payer : 0,00 €"); await expect(receipt).toHaveCount(0);
+  const correction = page.getByText("Corriger une saisie erronée", { exact: true }).first(); await correction.click();
+  const cancel = page.getByRole("form", { name: "Annuler cette saisie" }).first(); await cancel.getByLabel("Motif de correction").fill("Correction fictive E2E"); await cancel.getByRole("button", { name: "Annuler cette saisie" }).click();
+  await expect(page.getByText("Partiellement payée", { exact: true })).toBeVisible(); await expect(page.getByText("Saisie annulée", { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

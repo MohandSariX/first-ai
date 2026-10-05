@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { quoteItemSchema } from "./operations.js";
 
-// Retain the domain vocabulary; payment/delivery transitions are deliberately not exposed.
+// Payment states are derived by PaymentService; delivery/write-off transitions remain deferred.
 export const INVOICE_STATUSES = ["draft", "issued", "sent", "partially_paid", "paid", "overdue", "cancelled", "written_off"] as const;
 export const createDraftInvoiceSchema = z.strictObject({
   customerId: z.uuid(), quoteId: z.uuid().optional(), jobId: z.uuid().optional(),
