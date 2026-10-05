@@ -81,6 +81,18 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
       return top;
     };
     y = Math.max(identity(snapshot.seller, "Vendeur", 42), identity(snapshot.customer, "Client facturé", 310)) + 18;
+    if (snapshot.version === 2) {
+      const seller = snapshot.seller.fiscalIdentity, buyer = snapshot.customer.billingIdentity;
+      if (seller.legalEntityType === "individual_entrepreneur") paragraph("Vendeur : Entrepreneur individuel (EI)");
+      if (seller.legalForm) paragraph(`Forme juridique : ${seller.legalForm}`);
+      if (seller.shareCapital !== null) paragraph(`Capital social : ${formatDocumentMoney(seller.shareCapital.includes(".") ? seller.shareCapital.padEnd(seller.shareCapital.indexOf(".") + 3, "0") : `${seller.shareCapital}.00`)}`);
+      if (seller.registration) paragraph(`Immatriculation : ${seller.registration}`);
+      if (seller.siren) paragraph(`SIREN vendeur : ${seller.siren}`);
+      if (buyer.siren) paragraph(`SIREN client : ${buyer.siren}`);
+      const categories = { services: "Services", goods: "Biens", mixed: "Biens et services" };
+      const treatments = { normal: "TVA normale", franchise: "Franchise en base", exemption: "Exonération", reverse_charge: "Autoliquidation", other: "Autre cas fiscal" };
+      paragraph(`Classification : ${snapshot.classification.transactionType} - ${categories[snapshot.classification.operationCategory]} - ${treatments[snapshot.classification.vatTreatment]}`);
+    }
     if (!snapshot.customer.addressLine1) paragraph("Adresse de facturation client non renseignée. L’adresse d’intervention n’est pas utilisée.");
     paragraph("DOCUMENT TECHNIQUE - Conformité fiscale non validée. Vérifier les mentions obligatoires avant tout usage en production.");
     heading("Prestations");

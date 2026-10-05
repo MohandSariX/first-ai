@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "job_reports.read", "job_reports.write",
   "invoices.read", "invoices.write", "invoices.issue",
   "payments.read", "payments.write",
+  "billing.seller.write", "billing.customer.write",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -27,9 +28,9 @@ export const ROLE_PERMISSIONS: Readonly<
 > = {
   OWNER: PERMISSIONS,
   ADMIN: PERMISSIONS,
-  MANAGER: PERMISSIONS,
+  MANAGER: PERMISSIONS.filter(p => p !== "billing.seller.write"),
   TECHNICIAN: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "jobs.read", "jobs.execute", "job_reports.read", "job_reports.write"],
-  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "quotes.read", "jobs.read", "invoices.read", "invoices.write", "invoices.issue", "payments.read", "payments.write"],
+  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "quotes.read", "jobs.read", "invoices.read", "invoices.write", "invoices.issue", "payments.read", "payments.write", "billing.customer.write"],
   READ_ONLY: ["organizations.read", "users.read", "customers.read", "contacts.read", "sites.read", "leads.read", "services.read", "quotes.read", "jobs.read", "job_reports.read", "invoices.read", "payments.read"],
 };
 

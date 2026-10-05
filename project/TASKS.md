@@ -5,15 +5,14 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun chantier produit actif. Audit fiscal documentaire terminé, correctifs en attente ;
-  maintenir le snapshot après chaque jalon.
+- Aucun jalon en cours : M1 livré et validations locales terminées.
 
 ## NEXT
 
 1. Valider le périmètre fiscal applicable (M0 de l’[audit](../docs/compliance/france-invoicing-audit.md)) :
    vendeur/TVA/clientèle, réception électronique déjà due et champ encaissement B2C.
-2. Préparer le petit jalon M1 : identités et adresses de facturation/classification,
-   puis M2 : numéro fiscal à l’émission. Implémenter seulement sur mission explicite.
+2. M2 : référence brouillon distincte, numéro fiscal à l’émission et chronologie.
+   M1 est livré sans certification ; implémenter M2 seulement sur mission explicite.
 3. Garder Director read-only et les spécialistes supervisés ; aucun élargissement
    d'autonomie, d'actions allowlistées ou d'approbateurs sans mission explicite.
 

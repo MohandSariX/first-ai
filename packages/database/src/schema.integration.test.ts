@@ -31,21 +31,28 @@ const expectedEnums = [
   "agent_status",
   "agent_tool_call_status",
   "approval_status",
+  "billing_classification",
   "customer_risk_level",
   "customer_status",
   "customer_type",
+  "fiscal_territory",
   "infestation_level",
   "invoice_status",
+  "invoice_transaction_type",
   "job_priority",
   "job_status",
   "lead_source",
   "lead_status",
+  "legal_entity_type",
   "model_profile",
+  "operation_category",
   "payment_method",
   "payment_status",
   "pricing_mode",
   "quote_status",
   "user_role",
+  "vat_regime",
+  "vat_treatment",
 ];
 
 const expectedForeignKeys = [
@@ -159,7 +166,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 13 }]);
+    expect(result).toEqual([{ migrationCount: 14 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

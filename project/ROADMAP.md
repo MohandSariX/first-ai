@@ -30,10 +30,13 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
 - Audit fiscal/facturation français au 2026-10-05 : sources officielles, inspection
   code/PDF, matrice d’écarts et spécification par petits jalons.
   **Audit terminé ; corrections en attente, conformité non établie.**
+- M1 identités/adresses de facturation vendeur/client, classification explicite,
+  qualification TVA, UI de configuration, snapshot v2 des nouvelles émissions.
+  Historique préservé ; périmètre technique domestique FR, sans certification fiscale.
 
 ## CURRENT
 
-Audit fiscal documentaire terminé ; aucun correctif ni chantier produit actif.
+M1 livré techniquement et validé localement ; aucun jalon en cours. Conformité non établie.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
 
@@ -43,7 +46,7 @@ envoi, rapprochement ou élargissement du registre IA dans ce jalon.
   sans regrouper toutes les corrections dans un seul chantier :
   1. M0 : qualifier émetteur/TVA/clientèle/flux et sécurisation encaissement B2C ;
      organiser la réception via plateforme si déjà requise, sans attendre le PDF.
-  2. M1 : identités vendeur/client, adresses de facturation, classification des opérations.
+  2. M1 livré : ne pas déduire la validation fiscale de la présence des nouveaux champs.
   3. M2 : référence brouillon séparée, numéro fiscal atomique à l’émission, dates/chronologie.
   4. M3 : mentions conditionnelles, TVA, conditions B2B et snapshot/PDF enrichi.
   5. M4 : avoirs/rectificatifs explicites et soldes corrigés, sans réécriture de l’original.

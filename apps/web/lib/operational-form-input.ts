@@ -1,7 +1,8 @@
 import { acceptQuoteSchema, addQuoteItemSchema, assignTechnicianSchema, createDraftJobSchema, createDraftQuoteSchema, createJobReportSchema, scheduleJobSchema, updateDraftQuoteSchema, updateJobReportSchema, updateQuoteItemSchema } from "@first-ai/schemas";
 import { z } from "zod";
 import { createDraftInvoiceSchema, addInvoiceItemSchema, updateInvoiceItemSchema, recordPaymentSchema, cancelPaymentSchema } from "@first-ai/schemas";
-export const operationSchema = z.enum(["payment.record", "payment.cancel", "invoice.create", "invoice.addItem", "invoice.updateItem", "invoice.removeItem", "invoice.issue", "invoice.cancel", "quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
+import { sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema } from "@first-ai/schemas";
+export const operationSchema = z.enum(["billing.seller", "billing.customer", "invoice.classify", "payment.record", "payment.cancel", "invoice.create", "invoice.addItem", "invoice.updateItem", "invoice.removeItem", "invoice.issue", "invoice.cancel", "quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
 export type Operation = z.infer<typeof operationSchema>;
 export function formText(form: FormData, key: string): string { const v = form.get(key); return typeof v === "string" ? v.trim() : ""; }
 const optional = (f: FormData, k: string) => formText(f, k) || undefined;
@@ -9,6 +10,14 @@ const itemInput = (f: FormData) => ({ serviceId: optional(f, "serviceId") ?? nul
 // The same schemas validate the browser form and the server action, before service validation.
 export function parseOperationalForm(operation: Operation, f: FormData) {
   switch (operation) {
+    case "billing.seller": case "billing.customer": {
+      const schema = operation === "billing.seller" ? sellerBillingSchema : customerBillingSchema;
+      return schema.parse(Object.fromEntries(Object.keys(schema.shape).map(key => {
+        const value = formText(f, key);
+        return [key, key === "vatOnDebits" || key === "taxablePerson" ? (value === "yes" ? true : value === "no" ? false : null) : value || null];
+      })));
+    }
+    case "invoice.classify": return invoiceClassificationSchema.parse(Object.fromEntries(Object.keys(invoiceClassificationSchema.shape).map(key => [key, formText(f, key) || null])));
     case "payment.record": return recordPaymentSchema.parse({ amount: formText(f, "amount"), method: formText(f, "method"), paidAt: formText(f, "paidAt"), reference: formText(f, "reference"), idempotencyKey: formText(f, "idempotencyKey") });
     case "payment.cancel": return cancelPaymentSchema.parse({ reason: formText(f, "reason") });
     case "invoice.create": return createDraftInvoiceSchema.parse({ customerId: formText(f, "customerId"), issueDate: formText(f, "issueDate"), dueDate: formText(f, "dueDate"), quoteId: optional(f, "sourceQuoteId"), jobId: optional(f, "sourceJobId"), notes: optional(f, "notes"), internalNotes: optional(f, "internalNotes") });

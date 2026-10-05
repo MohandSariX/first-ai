@@ -368,6 +368,12 @@ Chorus Pro/B2G reste un flux spécifique à cadrer si clients publics concernés
 
 ### M1 — Identités de facturation et classification
 
+**Statut d’implémentation : livré techniquement**, migration additive 0013,
+profils structurés/UI, classification explicite et snapshot v2 des nouvelles
+émissions. Voir [périmètre, contrôles et limitations M1](../architecture/billing-identities.md).
+La matrice ci-dessus reste le constat historique du 05/10/2026, pas une matrice
+réécrite pour prétendre à la conformité ; M2–M7 et la qualification M0 restent ouverts.
+
 - Petit modèle/UI vendeur et adresses client distinctes ; données fiscales
   qualifiées et champs conditionnels, aucune adresse de site implicite.
 - Étendre le snapshot versionné aux identités et qualifications retenues ; bloquer

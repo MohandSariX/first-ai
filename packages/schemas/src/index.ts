@@ -6,3 +6,4 @@ export * from "./proposals.js";
 export * from "./invoices.js";
 export * from "./payments.js";
 export * from "./invoice-document.js";
+export * from "./billing.js";

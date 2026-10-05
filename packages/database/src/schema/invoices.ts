@@ -7,6 +7,7 @@ import { quotes, jobs } from "./operations.js";
 import { users } from "./users.js";
 import { agents } from "./agent-observability.js";
 import { services } from "./services.js";
+import { transactionTypeEnum, operationCategoryEnum, fiscalTerritoryEnum, vatTreatmentEnum } from "./billing-enums.js";
 
 export const invoiceStatusEnum = pgEnum("invoice_status", INVOICE_STATUSES);
 const amount = (name: string) => numeric(name, { precision: 14, scale: 2 });
@@ -20,6 +21,8 @@ export const invoices = pgTable("invoices", {
   subtotal: amount("subtotal").notNull().default("0"), taxAmount: amount("tax_amount").notNull().default("0"), total: amount("total").notNull().default("0"),
   amountPaid: amount("amount_paid").notNull().default("0"), amountDue: amount("amount_due").notNull().default("0"), paidAt: timestamp("paid_at", { withTimezone: true }),
   documentSnapshot: jsonb("document_snapshot").$type<InvoiceDocumentSnapshot>(),
+  transactionType: transactionTypeEnum("transaction_type"), operationCategory: operationCategoryEnum("operation_category"),
+  fiscalTerritory: fiscalTerritoryEnum("fiscal_territory"), vatTreatment: vatTreatmentEnum("vat_treatment"), vatReason: varchar("vat_reason", { length: 500 }),
   notes: text("notes"), internalNotes: text("internal_notes"), createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"),
   ...timestamps(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, t => [

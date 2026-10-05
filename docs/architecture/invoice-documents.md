@@ -4,6 +4,12 @@ Fondation technique, **pas une validation fiscale ni une autorisation d’usage
 production**. Aucun email, PDF distant, stockage objet, réseau de facturation,
 avoir ou opération bancaire introduit.
 
+La version 1 décrite ci-dessous est historique. Les nouvelles émissions utilisent
+désormais le [snapshot v2 et les identités/classifications M1](billing-identities.md).
+Les profils vendeur/client ont leurs champs structurés et UI dédiées ; l’adresse
+client n’est plus absente sur les nouvelles factures correctement configurées.
+Les anciens snapshots restent inchangés. Les limites M2–M7 restent applicables.
+
 ## Document commercial immuable
 
 `invoices.document_snapshot` est un JSONB versionné/validé Zod, scoped par la

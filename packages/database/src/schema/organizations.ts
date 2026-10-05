@@ -1,14 +1,27 @@
 import {
+  check,
+  boolean,
+  numeric,
   timestamp,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
+import { legalEntityTypeEnum, vatRegimeEnum } from "./billing-enums.js";
+import { sql } from "drizzle-orm";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
   legalName: varchar("legal_name", { length: 255 }),
+  legalEntityType: legalEntityTypeEnum("legal_entity_type"),
+  legalForm: varchar("legal_form", { length: 80 }),
+  siren: varchar("siren", { length: 9 }),
+  registration: varchar("registration", { length: 255 }),
+  shareCapital: numeric("share_capital", { precision: 14, scale: 2 }),
+  vatRegime: vatRegimeEnum("vat_regime"),
+  vatOnDebits: boolean("vat_on_debits"),
+  companySize: varchar("company_size", { length: 16 }),
   siret: varchar("siret", { length: 14 }),
   vatNumber: varchar("vat_number", { length: 32 }),
   email: varchar("email", { length: 320 }),
@@ -30,4 +43,6 @@ export const organizations = pgTable("organizations", {
     .notNull()
     .defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-});
+}, t => [
+  check("organizations_fiscal_identity_check", sql`(${t.siren} is null or ${t.siren} ~ '^[0-9]{9}$') and (${t.siren} is null or ${t.siret} is null or left(${t.siret}, 9) = ${t.siren}) and (${t.shareCapital} is null or ${t.shareCapital} >= 0) and (${t.companySize} is null or ${t.companySize} in ('micro','sme','eti','large'))`),
+]);

@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { quoteItemSchema } from "./operations.js";
+import { invoiceClassificationSchema } from "./billing.js";
 
 // Payment states are derived by PaymentService; delivery/write-off transitions remain deferred.
 export const INVOICE_STATUSES = ["draft", "issued", "sent", "partially_paid", "paid", "overdue", "cancelled", "written_off"] as const;
 export const createDraftInvoiceSchema = z.strictObject({
+  ...invoiceClassificationSchema.partial().shape,
   customerId: z.uuid(), quoteId: z.uuid().optional(), jobId: z.uuid().optional(),
   issueDate: z.iso.date(), dueDate: z.iso.date(),
   notes: z.string().trim().max(5000).optional(), internalNotes: z.string().trim().max(5000).optional(),

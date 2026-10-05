@@ -1,4 +1,4 @@
-import { invoiceDocumentSnapshotSchema, type InvoiceDocumentSnapshot } from "@first-ai/schemas";
+import { invoiceDocumentSnapshotSchema, sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema, validateBillingScenario, type InvoiceDocumentSnapshot } from "@first-ai/schemas";
 import type { Invoice, InvoiceItem, InvoiceSession } from "@first-ai/database";
 import { calculateQuoteTotals } from "./quote-calculation.js";
 import { OperationalConflictError } from "./operational-policies.js";
@@ -10,6 +10,13 @@ export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly 
   const { seller, customer } = identity;
   if (!seller || !customer || seller.id !== invoice.organizationId || customer.organizationId !== invoice.organizationId || customer.id !== invoice.customerId) throw new OperationalConflictError("Identité de facturation indisponible.");
   if (seller.currency !== "EUR") throw new OperationalConflictError("Seules les factures en EUR sont prises en charge.");
+  const fiscalIdentity = sellerBillingSchema.safeParse(Object.fromEntries(Object.keys(sellerBillingSchema.shape).map(k => [k, seller[k as keyof typeof seller]])));
+  const billingIdentity = customerBillingSchema.safeParse(Object.fromEntries(Object.keys(customerBillingSchema.shape).map(k => [k, customer[k as keyof typeof customer]])));
+  const classification = invoiceClassificationSchema.safeParse({ transactionType: invoice.transactionType, operationCategory: invoice.operationCategory, fiscalTerritory: invoice.fiscalTerritory, vatTreatment: invoice.vatTreatment, vatReason: invoice.vatReason });
+  if (!fiscalIdentity.success || !billingIdentity.success || !classification.success) throw new OperationalConflictError("Émission impossible : configurez les identités de facturation et la classification fiscale explicite du brouillon.");
+  const gaps = validateBillingScenario(fiscalIdentity.data, billingIdentity.data, classification.data, items.map(i => i.taxRate));
+  if (gaps.length) throw new OperationalConflictError(`Émission impossible : ${gaps.join(" ")}`);
+  const billing = billingIdentity.data;
   const lines = items.map(item => {
     const { subtotal, taxAmount, total } = calculateQuoteTotals([{ ...item, costEstimate: "0" }]);
     const [whole = "0", fraction = ""] = item.taxRate.split(".");
@@ -20,11 +27,11 @@ export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly 
   for (const line of lines) { const g = groups.get(line.taxRate) ?? { base: 0n, amount: 0n }; g.base += cents(line.subtotal); g.amount += cents(line.taxAmount); groups.set(line.taxRate, g); }
   const { subtotal, taxAmount, total } = calculateQuoteTotals(items.map(i => ({ ...i, costEstimate: "0" })));
   return invoiceDocumentSnapshotSchema.parse({
-    version: 1, organizationId: invoice.organizationId, invoiceId: invoice.id,
+    version: 2, organizationId: invoice.organizationId, invoiceId: invoice.id,
     capturedAt: capturedAt.toISOString(), currency: seller.currency,
-    seller: { name: seller.name, legalName: seller.legalName, addressLine1: seller.addressLine1, addressLine2: seller.addressLine2, postalCode: seller.postalCode, city: seller.city, country: seller.country, siret: seller.siret, vatNumber: seller.vatNumber, email: seller.email, phone: seller.phone },
-    // The current CRM has no customer billing address. Missing is explicit, not guessed from a site.
-    customer: { name: customer.name, legalName: customer.legalName, addressLine1: null, addressLine2: null, postalCode: null, city: null, country: null, siret: customer.siret, vatNumber: customer.vatNumber, email: customer.billingEmail, phone: customer.phone },
+    seller: { name: seller.name, legalName: seller.legalName, addressLine1: seller.addressLine1, addressLine2: seller.addressLine2, postalCode: seller.postalCode, city: seller.city, country: seller.country, siret: seller.siret, vatNumber: seller.vatNumber, email: seller.email, phone: seller.phone, fiscalIdentity: fiscalIdentity.data },
+    customer: { name: billing.billingName, legalName: billing.billingLegalName, addressLine1: billing.billingAddressLine1, addressLine2: billing.billingAddressLine2, postalCode: billing.billingPostalCode, city: billing.billingCity, country: billing.billingCountry, siret: billing.siret, vatNumber: billing.vatNumber, email: customer.billingEmail, phone: customer.phone, billingIdentity: billing },
+    classification: classification.data,
     invoice: { number: invoice.invoiceNumber, issueDate: invoice.issueDate, dueDate: invoice.dueDate, status: "issued", notes: invoice.notes },
     lines, totals: { subtotal, taxAmount, total },
     taxes: [...groups].sort(([a], [b]) => Number(a) - Number(b)).map(([rate, g]) => ({ rate, base: money(g.base), amount: money(g.amount) })),

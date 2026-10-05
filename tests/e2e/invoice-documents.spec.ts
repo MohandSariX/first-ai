@@ -15,13 +15,16 @@ test("issued invoice PDF download is immutable, authenticated and tenant/role sc
   await page.goto("/invoices"); await page.getByText("Nouvelle facture", { exact: true }).click();
   await page.getByLabel("Client", { exact: true }).selectOption({ label: e2eFixture.operationalCustomerName });
   await page.getByLabel("Date d’émission prévue").fill("2026-10-05"); await page.getByLabel("Échéance").fill("2026-11-05"); await page.getByRole("button", { name: "Créer le brouillon" }).click();
-  await expect(page.getByRole("heading", { name: /FAC-2026-\d{6}/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { name: /FAC-2026-\d{6}/, level: 1 })).toBeVisible();
   const id = page.url().split("/").at(-1)!, url = `/api/invoices/${id}/pdf`;
   await expect(page.getByRole("link", { name: "Télécharger le PDF" })).toHaveCount(0);
   expect((await page.request.get(url)).status()).toBe(409);
   const add = page.getByRole("form", { name: "Ajouter une ligne" });
   await add.getByLabel("Description").fill("Prestation fictive PDF"); await add.getByLabel("Quantité").fill("1"); await add.getByLabel("Prix unitaire HT (€)").fill("100"); await add.getByLabel("TVA (%)").fill("20"); await add.getByRole("button", { name: "Ajouter la ligne" }).click();
   await expect(page.getByRole("region", { name: "Totaux" })).toContainText("120,00 €");
+  const classification = page.getByRole("form", { name: "Enregistrer la classification" });
+  await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal"); await classification.getByRole("button", { name: "Enregistrer la classification" }).click();
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click();
   const link = page.getByRole("link", { name: "Télécharger le PDF" }); await expect(link).toBeVisible();
   const downloadPromise = page.waitForEvent("download"); await link.click(); const download = await downloadPromise;

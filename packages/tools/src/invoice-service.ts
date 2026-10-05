@@ -1,6 +1,6 @@
 import { hasPermission, type CurrentBusinessUser, type Permission } from "@first-ai/auth";
 import type { Invoice, InvoiceScope, InvoiceStoreInterface } from "@first-ai/database";
-import { addInvoiceItemSchema, createDraftInvoiceSchema, invoiceDocumentSnapshotSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
+import { addInvoiceItemSchema, createDraftInvoiceSchema, invoiceClassificationSchema, invoiceDocumentSnapshotSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
 import { z } from "zod";
 import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
@@ -36,6 +36,15 @@ export class InvoiceService {
     if (invoice.jobId) { const job = found(await s.jobs.get({ organizationId: c.organizationId, jobId: invoice.jobId }, true)); if (job.customerId !== invoice.customerId || job.status !== "completed" || (invoice.quoteId && job.quoteId !== invoice.quoteId)) throw new OperationalConflictError("La source doit être une intervention terminée cohérente avec le client et le devis."); }
   }
   async createDraftInvoice(c: CurrentBusinessUser, input: unknown) { authorize(c, "invoices.write"); const parsed = createDraftInvoiceSchema.parse(input); return this.store.transaction(async s => { await this.validateLinks(s, c, parsed); return s.invoices.create(c.organizationId, c.userId, parsed); }); }
+  async updateClassification(c: CurrentBusinessUser, id: string, input: unknown) {
+    authorize(c, "invoices.write"); const parsed = invoiceClassificationSchema.parse(input), sc = scope(c, id);
+    return this.store.transaction(async s => {
+      const member = await s.membership(c); if (!member) throw new AuthorizationError("Adhésion inactive.");
+      authorize({ ...c, role: member.role }, "invoices.write");
+      draft(found(await s.invoices.get(sc, true)));
+      return found(await s.invoices.update(sc, parsed));
+    });
+  }
   private async persist(s: Pick<InvoiceStoreInterface, "invoices">, sc: InvoiceScope) { const totals = calculateInvoiceTotals(await s.invoices.items(sc)); return found(await s.invoices.update(sc, { ...totals, amountDue: totals.total })); }
   async addInvoiceItem(c: CurrentBusinessUser, id: string, input: unknown) { authorize(c, "invoices.write"); const parsed = addInvoiceItemSchema.parse(input), sc = scope(c, id); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); if ((await s.invoices.items(sc)).length >= 200) throw new OperationalConflictError("Maximum 200 lignes par facture."); if (parsed.serviceId && !await s.service(c.organizationId, parsed.serviceId)) throw new ResourceNotFoundError("Prestation active introuvable."); const item = await s.invoices.addItem(sc, parsed); await this.persist(s, sc); return item; }); }
   async updateInvoiceItem(c: CurrentBusinessUser, id: string, itemId: string, input: unknown) { authorize(c, "invoices.write"); const parsed = updateInvoiceItemSchema.parse(input), sc = scope(c, id); z.uuid().parse(itemId); return this.store.transaction(async s => { draft(found(await s.invoices.get(sc, true))); if (parsed.serviceId && !await s.service(c.organizationId, parsed.serviceId)) throw new ResourceNotFoundError("Prestation active introuvable."); const item = found(await s.invoices.updateItem(sc, itemId, parsed)); await this.persist(s, sc); return item; }); }

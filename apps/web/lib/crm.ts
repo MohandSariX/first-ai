@@ -22,6 +22,7 @@ import {
   QuoteService, JobService, JobReportService,
   InvoiceService,
   PaymentService,
+  BillingIdentityService,
 } from "@first-ai/tools";
 
 import { requireBusinessUser } from "./auth";
@@ -56,5 +57,6 @@ export async function createCrm(providedContext?: CurrentBusinessUser) {
     reports: new JobReportService(operationalStore),
     invoices: new InvoiceService(new InvoiceStore(database)),
     payments: new PaymentService(new PaymentStore(database)),
+    billing: new BillingIdentityService(new InvoiceStore(database)),
   };
 }

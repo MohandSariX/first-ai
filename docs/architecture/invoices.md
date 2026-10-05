@@ -3,6 +3,8 @@
 Document/PDF delivery now builds on this foundation:
 [immutable invoice documents](invoice-documents.md). Issue captures a versioned
 snapshot atomically; PDF remains a technical, not fiscally certified, document.
+New issues require [M1 billing identities and explicit classification](billing-identities.md);
+historical snapshots are preserved. Draft numbering below is unchanged (M2 deferred).
 
 ## Scope and data
 

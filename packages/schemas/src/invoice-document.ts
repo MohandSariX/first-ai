@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema } from "./billing.js";
 
 const nullableText = (max: number) => z.string().max(max).nullable();
 const money = z.string().regex(/^\d{1,12}\.\d{2}$/);
@@ -11,7 +12,7 @@ const identity = z.strictObject({
 });
 
 // A versioned document DTO, not a live CRM record. No internal notes or secrets.
-export const invoiceDocumentSnapshotSchema = z.strictObject({
+export const invoiceDocumentSnapshotV1Schema = z.strictObject({
   version: z.literal(1), organizationId: z.uuid(), invoiceId: z.uuid(),
   capturedAt: z.iso.datetime(), currency: z.literal("EUR"),
   seller: identity, customer: identity,
@@ -29,4 +30,11 @@ export const invoiceDocumentSnapshotSchema = z.strictObject({
   totals: z.strictObject({ subtotal: money, taxAmount: money, total: money }),
   taxes: z.array(z.strictObject({ rate: z.string().regex(/^\d{1,3}\.\d{3}$/), base: money, amount: money })).min(1).max(200),
 });
+export const invoiceDocumentSnapshotV2Schema = invoiceDocumentSnapshotV1Schema.extend({
+  version: z.literal(2),
+  seller: identity.extend({ fiscalIdentity: sellerBillingSchema }),
+  customer: identity.extend({ billingIdentity: customerBillingSchema }),
+  classification: invoiceClassificationSchema,
+});
+export const invoiceDocumentSnapshotSchema = z.discriminatedUnion("version", [invoiceDocumentSnapshotV1Schema, invoiceDocumentSnapshotV2Schema]);
 export type InvoiceDocumentSnapshot = z.infer<typeof invoiceDocumentSnapshotSchema>;

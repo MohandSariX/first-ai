@@ -7,13 +7,15 @@ import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { InvoiceService } from "./invoice-service.js";
 import { createInvoiceToolRegistry } from "./invoice-tools.js";
 import { PaymentService } from "./payment-service.js";
+import { BillingIdentityService } from "./billing-service.js";
+import { sellerBillingSchema, customerBillingSchema } from "@first-ai/schemas";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
   const clientOptions = { auth: { autoRefreshToken: false, persistSession: false } };
   let db: ReturnType<typeof createDatabaseClient>, service: InvoiceService, store: InvoiceStore, admin: SupabaseClient, paymentService: PaymentService;
   const clients: SupabaseClient[] = [], contexts: CurrentBusinessUser[] = [], created: string[] = [], sourceQuotes: string[] = [], sourceJobs: string[] = [], sourceServices: string[] = [];
-  const draft = (customerId: string) => ({ customerId, issueDate: "2026-10-05", dueDate: "2026-11-05" });
+  const draft = (customerId: string) => ({ customerId, issueDate: "2026-10-05", dueDate: "2026-11-05", transactionType: "B2B" as const, operationCategory: "services" as const, fiscalTerritory: "domestic" as const, vatTreatment: "normal" as const, vatReason: null });
   beforeAll(async () => {
     for (const name of ["DATABASE_URL", "SUPABASE_URL"]) if (!["localhost", "127.0.0.1"].includes(new URL(process.env[name] ?? "missing").hostname)) throw new Error("Invoice integration refuses non-local configuration.");
     admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, clientOptions);
@@ -22,9 +24,9 @@ describe("local invoice foundation", () => {
     for (let n = 0; n < 2; n++) {
       const email = `invoice-${orgs[n]}@example.test`, password = `Fictional-${randomUUID()}`;
       const result = await admin.auth.admin.createUser({ email, password, email_confirm: true }); if (result.error) throw result.error; authIds.push(result.data.user.id);
-      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}`, legalName: `Fictional seller ${n}`, addressLine1: "1 Rue Fictive", postalCode: "75001", city: "Paris" });
+      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}`, legalName: `Fictional seller ${n}`, addressLine1: "1 Rue Fictive", postalCode: "75001", city: "Paris", legalEntityType: "company", legalForm: "SAS", registration: "RCS Paris (fictif)", shareCapital: "1000", siren: "123456789", vatNumber: "FR00123456789", vatRegime: "normal", vatOnDebits: false });
       await db.insert(users).values({ id: userIds[n]!, organizationId: orgs[n]!, authUserId: authIds[n]!, firstName: "Fictional", lastName: "Invoice owner", email, role: "OWNER" });
-      await db.insert(customers).values({ id: customerIds[n]!, organizationId: orgs[n]!, type: "company", name: `Fictional invoice customer ${n}` });
+      await db.insert(customers).values({ id: customerIds[n]!, organizationId: orgs[n]!, type: "company", name: `Fictional invoice customer ${n}`, billingName: `Fictional invoice customer ${n}`, billingLegalName: `Fictional legal customer ${n}`, billingClassification: "professional", billingAddressLine1: "2 Rue de Facturation Fictive", billingPostalCode: "75002", billingCity: "Paris", billingCountry: "FR", establishmentCountry: "FR", taxablePerson: true, siren: "987654321" });
       const site = randomUUID(), catalog = randomUUID(), quote = randomUUID(), job = randomUUID();
       sourceQuotes.push(quote); sourceJobs.push(job); sourceServices.push(catalog);
       await db.insert(customerSites).values({ id: site, organizationId: orgs[n]!, customerId: customerIds[n]!, name: "Fictional site", addressLine1: "1 Test Street", postalCode: "75001", city: "Paris" });
@@ -120,13 +122,14 @@ describe("local invoice foundation", () => {
   });
   const receipt = (amount = "10") => ({ amount, method: "bank_transfer", paidAt: "2026-01-01T12:00:00Z", reference: "Fictional receipt", idempotencyKey: randomUUID() });
   async function issued(n = 0, amount = "100") {
-    const invoice = await service.createDraftInvoice(contexts[n]!, draft(customerIds[n]!));
+    const invoice = await service.createDraftInvoice(contexts[n]!, { ...draft(customerIds[n]!), vatTreatment: "exemption", vatReason: "Motif fictif validé pour ce scénario de test, sans usage fiscal réel" });
     await service.addInvoiceItem(contexts[n]!, invoice.id, { description: "Fictional payment line", quantity: "1", unitPrice: amount, taxRate: "0" });
     return service.issueInvoice(contexts[n]!, invoice.id);
   }
   it("atomically captures available billing identities and freezes issued document data", async () => {
     const invoice = await issued(), c = contexts[0]!, before = await service.getInvoiceDocument(c, invoice.id);
-    expect(before.snapshot).toMatchObject({ organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: null }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
+    expect(before.snapshot).toMatchObject({ version: 2, organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: "2 Rue de Facturation Fictive" }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
+    if (before.snapshot.version !== 2) throw new Error("Expected new document v2");
     try {
       await db.update(customers).set({ name: "Changed customer", legalName: "Changed legal identity" }).where(eq(customers.id, customerIds[0]!));
       await db.update(organizations).set({ legalName: "Changed seller", addressLine1: "Changed address" }).where(eq(organizations.id, orgs[0]!));
@@ -270,5 +273,68 @@ describe("local invoice foundation", () => {
     for (const patch of [{ customerId: customerIds[1]! }, { invoiceId: (await issued(1)).id }, { createdByUserId: userIds[1]! }]) await expect(db.insert(payments).values({ ...input, ...patch, idempotencyKey: randomUUID() })).rejects.toMatchObject({ cause: { code: "23503" } });
     await expect(db.insert(payments).values({ ...input, amount: "0", idempotencyKey: randomUUID() })).rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(db.update(invoices).set({ amountDue: "-1" }).where(eq(invoices.id, invoice.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+  it("M1 scopes billing identity reads/writes, rejects anonymous and stale membership/roles", async () => {
+    const billing = new BillingIdentityService(store), c = contexts[0]!;
+    const current = await billing.getCustomer(c, customerIds[0]!);
+    const input = customerBillingSchema.parse(Object.fromEntries(Object.keys(customerBillingSchema.shape).map(k => [k, current[k as keyof typeof current]])));
+    await expect(billing.getCustomer(c, customerIds[1]!)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(billing.updateCustomer(c, customerIds[1]!, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    for (const n of [0, 1]) {
+      expect((await clients[n]!.from("customers").select("billing_address_line1").eq("id", customerIds[1 - n]!)).data).toEqual([]);
+      expect((await clients[n]!.from("organizations").select("legal_form").eq("id", orgs[1 - n]!)).data).toEqual([]);
+      expect((await clients[n]!.from("customers").update({ billing_city: "Attack" }).eq("id", customerIds[1 - n]!).select("id")).data).toEqual([]);
+    }
+    const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, clientOptions);
+    for (const table of ["organizations", "customers"]) expect((await anon.from(table).select("id")).data).toEqual([]);
+    try {
+      await db.update(users).set({ status: "inactive" }).where(eq(users.id, c.userId));
+      await expect(billing.updateCustomer(c, customerIds[0]!, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect((await clients[0]!.from("customers").select("billing_city").eq("id", customerIds[0]!)).data).toEqual([]);
+      await db.update(users).set({ status: "active", role: "READ_ONLY" }).where(eq(users.id, c.userId));
+      await expect(billing.updateCustomer(c, customerIds[0]!, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally { await db.update(users).set({ status: "active", role: "OWNER" }).where(eq(users.id, c.userId)); }
+    const seller = (await billing.getSeller(c))!;
+    const sellerInput = sellerBillingSchema.parse(Object.fromEntries(Object.keys(sellerBillingSchema.shape).map(k => [k, seller[k as keyof typeof seller]])));
+    for (const role of ["MANAGER", "ACCOUNTANT", "READ_ONLY", "TECHNICIAN"] as const) await expect(billing.updateSeller({ ...c, role }, sellerInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("M1 blocks missing explicit qualifications and captures complete B2B/B2C/B2G scenarios", async () => {
+    const c = contexts[0]!, billing = new BillingIdentityService(store), customer = await billing.getCustomer(c, customerIds[0]!);
+    const original = customerBillingSchema.parse(Object.fromEntries(Object.keys(customerBillingSchema.shape).map(k => [k, customer[k as keyof typeof customer]])));
+    const next = await service.createDraftInvoice(c, { customerId: customerIds[0], issueDate: "2026-10-05", dueDate: "2026-11-05" });
+    await service.addInvoiceItem(c, next.id, { description: "M1 test", quantity: "1", unitPrice: "10", taxRate: "20" });
+    await expect(service.issueInvoice(c, next.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await service.getInvoice(c, next.id)).toMatchObject({ status: "draft", documentSnapshot: null, issuedAt: null });
+    const classification = { transactionType: "B2B", operationCategory: "services", fiscalTerritory: "domestic", vatTreatment: "normal", vatReason: null };
+    await service.updateClassification(c, next.id, classification);
+    try {
+      await billing.updateCustomer(c, customer.id, { ...original, billingAddressLine1: null });
+      await expect(service.issueInvoice(c, next.id)).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(await service.getInvoice(c, next.id)).toMatchObject({ status: "draft", documentSnapshot: null });
+      for (const [kind, transaction, category] of [["professional", "B2B", "services"], ["individual", "B2C", "goods"], ["public", "B2G", "mixed"]] as const) {
+        await billing.updateCustomer(c, customer.id, { ...original, billingClassification: kind, taxablePerson: kind !== "individual", billingLegalName: kind === "individual" ? null : original.billingLegalName });
+        const invoice = await service.createDraftInvoice(c, { ...draft(customer.id), transactionType: transaction, operationCategory: category });
+        await service.addInvoiceItem(c, invoice.id, { description: "Scenario fictif", quantity: "1", unitPrice: "10", taxRate: "20" });
+        const issued = await service.issueInvoice(c, invoice.id);
+        expect(issued.documentSnapshot).toMatchObject({ version: 2, classification: { transactionType: transaction, operationCategory: category }, customer: { addressLine1: original.billingAddressLine1 } });
+        await expect(service.updateClassification(c, issued.id, classification)).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect(db.update(invoices).set({ operationCategory: "services" === category ? "goods" : "services" }).where(eq(invoices.id, issued.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+        const before = structuredClone(issued.documentSnapshot);
+        await billing.updateCustomer(c, customer.id, { ...original, billingCity: "Ville modifiée" });
+        expect((await service.getInvoiceDocument(c, issued.id)).snapshot).toEqual(before);
+      }
+    } finally { await billing.updateCustomer(c, customer.id, original); }
+  });
+  it("M1 issues a franchise invoice without inventing VAT identity or seller capital for EI", async () => {
+    const c = contexts[0]!, billing = new BillingIdentityService(store), seller = (await billing.getSeller(c))!;
+    const original = sellerBillingSchema.parse(Object.fromEntries(Object.keys(sellerBillingSchema.shape).map(k => [k, seller[k as keyof typeof seller]])));
+    try {
+      await billing.updateSeller(c, { ...original, legalEntityType: "individual_entrepreneur", legalForm: null, shareCapital: null, vatRegime: "franchise", vatNumber: null });
+      const invoice = await service.createDraftInvoice(c, { ...draft(customerIds[0]!), vatTreatment: "franchise" });
+      await service.addInvoiceItem(c, invoice.id, { description: "Franchise fictive", quantity: "1", unitPrice: "10", taxRate: "0" });
+      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toMatchObject({ version: 2, seller: { fiscalIdentity: { vatRegime: "franchise", shareCapital: null } }, classification: { vatTreatment: "franchise" }, totals: { total: "10.00" } });
+      await billing.updateSeller(c, original);
+      expect((await service.getInvoiceDocument(c, invoice.id)).snapshot.seller.vatNumber).toBeNull();
+    } finally { await billing.updateSeller(c, original); }
   });
 });

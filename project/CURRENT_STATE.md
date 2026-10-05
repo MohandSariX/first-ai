@@ -58,9 +58,10 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 - Facturation : `invoices`, `invoice_items`, `payments`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Treize migrations 0000–0012 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0012_flawless_havok.sql`, snapshot document JSONB facture,
-trigger de capture obligatoire à l’émission et protection d’immutabilité commerciale.
+Quatorze migrations 0000–0013 dans `packages/database/drizzle/`, seule source de migration
+applicative. Dernière : `0013_tiresome_komodo.sql`, champs structurés d’identité
+vendeur/client et classification facture ; snapshot v2 obligatoire aux nouvelles
+émissions et classification SQL immuable. Aucun backfill des snapshots historiques.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
@@ -97,12 +98,18 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   `docs/architecture/invoices.md`. Envoi/perte conservés dans l’enum sans opérations.
 - Document facture : snapshot Zod/versionné figé atomiquement à l’émission avec
   identités vendeur/client, lignes, dates, numéro, notes client, totaux et TVA par taux.
-  Seller = champs organizations existants, nom/adresse/code postal/ville/pays requis
-  avant émission ; aucun identifiant inventé. PDFKit serveur génère à la demande
+  V2 capture identités fiscales/de facturation et classification explicite ; V1 reste
+  lisible, inchangé. Profil vendeur dans `/settings/billing` (OWNER/ADMIN write),
+  identité/adresse client dédiée dans sa fiche (rôles invoices.write autorisés),
+  classification B2B/B2C/B2G, services/goods/mixed et traitement TVA dans le brouillon.
+  Émission domestique FR seulement, données applicables requises selon scénario ;
+  pas d’inférence secteur/site/TVA ni identifiant inventé. PDFKit serveur génère à la demande
   un vrai PDF français, indépendant du CRM live, avec encart d’encaissements actualisé
   déclaratif/non vérifié par banque. Pas de stockage PDF ni IA. Download authentifié,
   membership/rôle courants revérifiés ; READ_ONLY autorisé, TECHNICIAN refusé.
   `docs/architecture/invoice-documents.md` décrit les limites fiscales explicites.
+  [M1 identités/classification](../docs/architecture/billing-identities.md) détaille
+  TVA normale/franchise/exonération/autoliquidation, motifs et refus des cas non cadrés.
 - Paiements : saisie manuelle de fonds déjà reçus sur facture émise, NUMERIC/BigInt,
   encaissements partiels/complets, montant reçu/reste dû et statut dérivés. Verrou facture,
   clé anti-doublon, rejet trop-perçu ; paiement + solde dans une transaction. Rôle et
@@ -162,6 +169,7 @@ Cloud : sortie 1 500 tokens/tour. Aucune tarification monétaire inventée.
 Routes protégées : `/dashboard`, `/customers`, `/customers/[id]`, `/leads`, `/services`,
 `/quotes`, `/quotes/[id]`, `/jobs`, `/jobs/[id]`, `/assistant`, `/settings/ai`.
 Facturation protégée : `/invoices`, `/invoices/[id]`, dans le menu mobile secondaire.
+`/settings/billing` : configuration vendeur, rôle de facturation requis pour lecture.
 `GET /api/invoices/[id]/pdf` : invoices.read, lookup tenant, active membership,
 PDF attachment/no-store ; aucun document public ni preview brouillon.
 `/` redirige vers dashboard ; `/login` et `GET /api/health` sont publics.
@@ -197,18 +205,22 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
   photos/signatures, disponibilité RH/certifications, trajets ni coûts réels détaillés.
 - Facturation : PDF technique disponible, **conformité fiscale non validée** ;
-  aucune adresse de facturation client dédiée : snapshot null et avertissement visible,
-  jamais adresse de site supposée. Profil vendeur administré hors UI dédiée.
+  identités/adresses de facturation dédiées et classifications explicites livrées M1,
+  jamais adresse de site supposée. Profils inconnus restent NULL, émission bloquée
+  tant que scénario incomplet ; aucun identifiant ou qualification déduit du CRM.
+  Pas de validation SIRENE/VIES ; formats/cohérence ne prouvent pas l’identité fiscale.
+  Flux internationaux/autres/mixte de traitements TVA par ligne non pris en charge
+  à l’émission ; adaptations B2C (opposition adresse) et cas particuliers à cadrer.
   Factures historiques sans snapshot non téléchargeables, sans backfill inventé.
   Polices PDF WinAnsi/français ; glyphes non supportés refusés explicitement.
   Snapshot/corps protégés SQL ; édition des lignes protégée par services, pas WORM
   ni audit/rétention fiscale complet contre administration privilégiée.
   Pas d’email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
-  Audit fiscal français documentaire terminé au 2026-10-05 ; corrections non
-  implémentées, conformité non établie. Numéros réservés dès le brouillon : ordre
-  et continuité à l’émission non garantis. Identités/mentions/TVA conditionnelles,
-  corrections/avoirs et conservation originale restent à implémenter/valider.
+  Audit fiscal français documentaire terminé au 2026-10-05 ; M1 implémenté,
+  conformité non établie. Numéros réservés dès le brouillon : ordre et continuité
+  à l’émission non garantis. Mentions/TVA légales complètes, corrections/avoirs
+  et conservation originale restent à implémenter/valider.
   Aucune plateforme de réception/émission ni e-reporting ; qualification fiscale
   de l’émetteur et du suivi encaissement B2C requise avant production.
   Voir [audit et spécification](../docs/compliance/france-invoicing-audit.md).
@@ -235,21 +247,19 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation document/PDF au 2026-10-05 : lint,
-typecheck, build, 178 tests unitaires, 68 intégrations locales et six E2E passent.
-Migration 0012 appliquée localement, second passage sûr via tracking. Six tests
-unitaires document/PDF et quatre intégrations ajoutés ; E2E téléchargement/refus
-d’accès ajouté sans provider IA. PDFs courts/multipages rendus et vérifiés visuellement.
+`supabase:start/stop/status`. Validation M1 au 2026-10-05 : lint, typecheck,
+187 tests unitaires, 71 intégrations locales, build et 7 E2E passent.
+Migration 0013 appliquée localement, second passage sûr via tracking.
+Tests M1 : qualifications/permissions, capture/rollback, UUID/RLS/anonymous/révocation,
+profils modifiés et classification immuable ; formulaires et PDF v2 réels.
+PDFs v1/v2 courts/multipages rendus et vérifiés visuellement ; aucun provider IA.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
-Audit fiscal documentaire du 2026-10-05 : suites non réexécutées, aucune migration
-ni modification applicative ; PDF fictif existant rendu et inspecté.
-
-Prochain jalon : qualification fiscale des flux/émetteurs et obligations déjà
-applicables (M0), puis **identités/adresses de facturation et classification** (M1).
-Numérotation à l’émission et mentions viennent ensuite ; avoirs, rétention/Unicode
+Prochain jalon technique : **M2, numérotation fiscale à l’émission et chronologie**.
+Qualification M0 de l’émetteur/flux et obligations déjà applicables reste nécessaire ;
+M1 ne la réalise pas automatiquement. Mentions M3, avoirs, rétention/Unicode
 et intégration électronique restent des jalons distincts, selon priorité applicable.
-Le plan détaillé est dans l’audit ; aucun correctif ni connecteur n’est livré.
+Le plan détaillé est dans l’audit ; aucun connecteur électronique n’est livré.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

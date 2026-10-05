@@ -70,4 +70,18 @@ describe("invoice documents", () => {
     const view = fixture(); view.snapshot.customer.name = "客户";
     await expect(generateInvoicePdf(view)).rejects.toMatchObject({ code: "CONFLICT" });
   });
+  it("renders v2 billing address, fiscal identity and explicit classifications without altering legacy v1", async () => {
+    const view = fixture(), legacy = structuredClone(view.snapshot);
+    view.snapshot = invoiceDocumentSnapshotSchema.parse({ ...view.snapshot, version: 2,
+      seller: { ...view.snapshot.seller, fiscalIdentity: { legalName: "Société Fictive Test", legalEntityType: "company", legalForm: "SAS", siren: "123456789", siret: null, vatNumber: "FR00123456789", registration: "RCS Paris (fictif)", shareCapital: "1000.00", vatRegime: "normal", vatOnDebits: false, companySize: "sme", addressLine1: "1 Rue Fictive", addressLine2: null, postalCode: "75001", city: "Paris", country: "FR" } },
+      customer: { ...view.snapshot.customer, name: "Client Facturé", addressLine1: "2 Rue Facturation", postalCode: "75002", city: "Paris", country: "FR", billingIdentity: { billingClassification: "professional", billingName: "Client Facturé", billingLegalName: null, billingAddressLine1: "2 Rue Facturation", billingAddressLine2: null, billingPostalCode: "75002", billingCity: "Paris", billingCountry: "FR", establishmentCountry: "FR", taxablePerson: true, siren: "987654321", siret: null, vatNumber: null } },
+      classification: { transactionType: "B2B", operationCategory: "services", fiscalTerritory: "domestic", vatTreatment: "normal", vatReason: null },
+    });
+    const bytes = await generateInvoicePdf(view), text = renderedText(bytes);
+    for (const expected of ["2 Rue Facturation", "SIREN vendeur : 123456789", "SIREN client : 987654321", "Forme juridique : SAS", "Capital social : 1 000,00 €", "B2B - Services - TVA normale", "Conformité fiscale non validée"]) expect(text).toContain(expected);
+    expect(text).not.toContain("Adresse de facturation client non renseignée");
+    expect(invoiceDocumentSnapshotSchema.parse(legacy)).toEqual(legacy);
+    expect(await generateInvoicePdf(view)).toEqual(bytes);
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-m1-qa.pdf", bytes);
+  });
 });

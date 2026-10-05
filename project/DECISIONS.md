@@ -215,5 +215,21 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Conséquences :** aucun backfill des factures historiques ; vendeur incomplet
   bloque l’émission. Adresse client absente explicitement signalée, pas substituée
   par un site. PDF français WinAnsi, refus de glyphes incompatibles. Conformité fiscale,
-  adresses client, corrections/avoirs, rétention/audit et e-invoicing restent différés.
+  corrections/avoirs, rétention/audit et e-invoicing restent différés. Identités/adresses
+  client et configuration vendeur sont désormais étendues par ADR-21, sans backfill.
 - **Sources :** `docs/architecture/invoice-documents.md`, InvoiceService, migration 0012.
+
+## ADR-21 — Identités structurées, qualification explicite et snapshot v2
+
+- **Statut :** adopté, implémenté M1.
+- **Décision :** colonnes relationnelles sur organizations/customers/invoices, adresse
+  de facturation distincte du site, classifications explicites et contrôles de scénario
+  à l’émission ; snapshot JSONB v2 seulement pour les nouveaux documents.
+- **Raison :** aucune identité fiscale ne peut être inventée ou déduite d’un segment
+  CRM ; les documents historiques ne doivent pas être réécrits depuis le profil courant.
+- **Conséquences :** configuration vendeur OWNER/ADMIN, client par rôles de facturation ;
+  membership/permissions relus aux accès. Émission domestique FR cadrée uniquement,
+  cas internationaux/autres refusés ; v1 inchangé. Pas de certification d’identifiants
+  ni de conformité globale ; numéro au brouillon inchangé jusqu’à M2.
+- **Sources :** `docs/architecture/billing-identities.md`, schémas/services billing,
+  migration `0013_tiresome_komodo.sql`.

@@ -15,8 +15,11 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
     const input = parseOperationalForm(operation, form);
     const quoteId = formText(form, "quoteId"), jobId = formText(form, "jobId");
     const invoiceId = formText(form, "invoiceId");
-    await withCrm(async ({ context, quotes, jobs, reports, invoices, payments }) => {
+    await withCrm(async ({ context, quotes, jobs, reports, invoices, payments, billing }) => {
       switch (operation) {
+        case "billing.seller": await billing.updateSeller(context, input); break;
+        case "billing.customer": await billing.updateCustomer(context, formText(form, "customerId"), input); break;
+        case "invoice.classify": await invoices.updateClassification(context, invoiceId, input); break;
         case "payment.record": await payments.recordPayment(context, invoiceId, input); break;
         case "payment.cancel": await payments.cancelPayment(context, invoiceId, formText(form, "paymentId"), input); break;
         case "invoice.create": destination = `/invoices/${(await invoices.createDraftInvoice(context, input)).id}`; break;
@@ -51,7 +54,7 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
         case "report.complete": await reports.completeJobReport(context, jobId); break;
       }
     });
-    for (const path of ["/invoices", ...(invoiceId ? [`/invoices/${invoiceId}`] : []), "/quotes", "/jobs", "/dashboard", ...(quoteId ? [`/quotes/${quoteId}`] : []), ...(jobId ? [`/jobs/${jobId}`] : [])]) revalidatePath(path);
+    for (const path of ["/settings/billing", "/customers", ...(formText(form, "customerId") ? [`/customers/${formText(form, "customerId")}`] : []), "/invoices", ...(invoiceId ? [`/invoices/${invoiceId}`] : []), "/quotes", "/jobs", "/dashboard", ...(quoteId ? [`/quotes/${quoteId}`] : []), ...(jobId ? [`/jobs/${jobId}`] : [])]) revalidatePath(path);
   } catch (error) {
     if (error instanceof z.ZodError) return { success: false, message: "Vérifiez les champs indiqués.", fieldErrors: error.flatten().fieldErrors };
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
