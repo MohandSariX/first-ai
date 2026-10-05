@@ -27,19 +27,30 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
 - Document facture : snapshot immuable à l’émission, PDF serveur à la demande,
   TVA multi-taux, encart paiements actualisé, téléchargement sécurisé et tests.
   Fondation technique uniquement, sans certification fiscale.
+- Audit fiscal/facturation français au 2026-10-05 : sources officielles, inspection
+  code/PDF, matrice d’écarts et spécification par petits jalons.
+  **Audit terminé ; corrections en attente, conformité non établie.**
 
 ## CURRENT
 
-Fondation document/PDF facture livrée ; aucun chantier produit actif.
+Audit fiscal documentaire terminé ; aucun correctif ni chantier produit actif.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
 
 ## NEXT
 
-- **FISCAL / INVOICE COMPLIANCE** : champs obligatoires/adresse facturation client,
-  numérotation/chronologie, corrections/avoirs, TVA/mentions, rétention, facturation
-  électronique française et immutabilité/audit production, avant usage fiscal réel.
-- Cadrer facturation partielle/source et configuration du profil vendeur en UI.
+- Suivre la [spécification fiscale](../docs/compliance/france-invoicing-audit.md),
+  sans regrouper toutes les corrections dans un seul chantier :
+  1. M0 : qualifier émetteur/TVA/clientèle/flux et sécurisation encaissement B2C ;
+     organiser la réception via plateforme si déjà requise, sans attendre le PDF.
+  2. M1 : identités vendeur/client, adresses de facturation, classification des opérations.
+  3. M2 : référence brouillon séparée, numéro fiscal atomique à l’émission, dates/chronologie.
+  4. M3 : mentions conditionnelles, TVA, conditions B2B et snapshot/PDF enrichi.
+  5. M4 : avoirs/rectificatifs explicites et soldes corrigés, sans réécriture de l’original.
+  6. M5/M6 : audit/rétention/original conservé, puis PDF Unicode (avançable si nécessaire).
+  7. M7 : intégration plateforme/e-reporting dédiée, à prioriser séparément si
+     émission/reporting déjà exigibles ; un PDF ordinaire n’est pas ce flux.
+- Cadrer facturation partielle/source sans présumer une seule facture par quote/job.
 - Consolider evals et scénarios métier des spécialistes, sans accroître automatiquement l'autonomie.
 - Examiner rétention, contrôle d'abus et inbox des approvals avant usage production.
 - Compléter audit/événements et consultation des traces selon les besoins effectivement introduits.

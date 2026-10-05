@@ -5,19 +5,22 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun chantier produit actif. Fondation document/PDF facture livrée ; maintenir
-  le snapshot après chaque jalon.
+- Aucun chantier produit actif. Audit fiscal documentaire terminé, correctifs en attente ;
+  maintenir le snapshot après chaque jalon.
 
 ## NEXT
 
-1. FISCAL / INVOICE COMPLIANCE : identité/adresse client, champs/mentions obligatoires,
-   numérotation, corrections/avoirs, TVA, rétention, e-invoicing et audit production.
-   Cadrer profil vendeur et règles source/partielle, sans considérer le PDF v1 conforme.
-2. Consolider evals spécialistes, audit/traces et rétention/contrôle d’abus des approvals.
+1. Valider le périmètre fiscal applicable (M0 de l’[audit](../docs/compliance/france-invoicing-audit.md)) :
+   vendeur/TVA/clientèle, réception électronique déjà due et champ encaissement B2C.
+2. Préparer le petit jalon M1 : identités et adresses de facturation/classification,
+   puis M2 : numéro fiscal à l’émission. Implémenter seulement sur mission explicite.
 3. Garder Director read-only et les spécialistes supervisés ; aucun élargissement
    d'autonomie, d'actions allowlistées ou d'approbateurs sans mission explicite.
 
 ## LATER
 
+- Mentions, avoirs, audit/rétention, Unicode et connecteur électronique : jalons distincts
+  de ROADMAP ; ne pas différer une obligation déjà applicable sous prétexte de cet ordre.
+- Evals spécialistes et rétention/contrôle d’abus des approvals.
 - Audit/événements/traces UI, puis voix/PWA terrain.
 - Domaines et intégrations différés selon ROADMAP ; aucune autonomie non mesurée.

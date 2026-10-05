@@ -205,8 +205,15 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
   ni audit/rétention fiscale complet contre administration privilégiée.
   Pas d’email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
-  Numéros réservés dès le brouillon ; règles fiscales/mentions/chronologie/rétention
-  à valider avant production. Aucun audit complet des mutations factures simulé.
+  Audit fiscal français documentaire terminé au 2026-10-05 ; corrections non
+  implémentées, conformité non établie. Numéros réservés dès le brouillon : ordre
+  et continuité à l’émission non garantis. Identités/mentions/TVA conditionnelles,
+  corrections/avoirs et conservation originale restent à implémenter/valider.
+  Aucune plateforme de réception/émission ni e-reporting ; qualification fiscale
+  de l’émetteur et du suivi encaissement B2C requise avant production.
+  Voir [audit et spécification](../docs/compliance/france-invoicing-audit.md).
+  Aucun audit complet des mutations factures simulé. Le sous-titre `/invoices`
+  dit encore « Aucun paiement, PDF ou envoi » : texte obsolète, non corrigé par l’audit.
   Outils invoices.get/search préparés Risk 0, non enregistrés avec les agents.
   Paiements manuels seulement, sans preuve bancaire/rapprochement, crédit non alloué
   ou remboursement. Les corrections peuvent remettre une facture à issued, sans
@@ -237,8 +244,12 @@ Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi 
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
+Audit fiscal documentaire du 2026-10-05 : suites non réexécutées, aucune migration
+ni modification applicative ; PDF fictif existant rendu et inspecté.
 
-Prochain jalon : **FISCAL / INVOICE COMPLIANCE**, champs obligatoires/adresse client,
-numérotation, corrections/avoirs, TVA/mentions, rétention, e-invoicing français et audit
-production ; consolider evals/protection des approvals sans autonomie accrue.
+Prochain jalon : qualification fiscale des flux/émetteurs et obligations déjà
+applicables (M0), puis **identités/adresses de facturation et classification** (M1).
+Numérotation à l’émission et mentions viennent ensuite ; avoirs, rétention/Unicode
+et intégration électronique restent des jalons distincts, selon priorité applicable.
+Le plan détaillé est dans l’audit ; aucun correctif ni connecteur n’est livré.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).
