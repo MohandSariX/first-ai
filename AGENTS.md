@@ -63,6 +63,55 @@ En cas de contradiction :
 
 ---
 
+## 2.1. Contexte permanent du projet
+
+Pour toute tâche substantielle, lire dans cet ordre pratique :
+
+1. `AGENTS.md` ;
+2. `project/CURRENT_STATE.md` ;
+3. `project/ROADMAP.md` ;
+4. `project/DECISIONS.md` lorsqu'une décision architecturale est concernée ;
+5. les documents métier et techniques pertinents, notamment les références fondatrices et `docs/`.
+
+Consulter aussi `project/TASKS.md` pour le travail immédiat. Cet ordre de lecture ne
+remplace pas la priorité conceptuelle des documents définie ci-dessus.
+
+La documentation du repository fait autorité sur le contexte des conversations
+précédentes. Inspecter le code, les migrations et les scripts réels avant de
+supposer que la documentation décrit encore correctement l'implémentation.
+Si l'implémentation et `CURRENT_STATE.md` divergent, signaler l'incohérence,
+déterminer l'implémentation réelle, puis seulement corriger `CURRENT_STATE.md`.
+Une différence ne justifie pas de modifier silencieusement le code ou les règles
+de sécurité pour les faire correspondre au résumé.
+
+Les documents de mémoire ont des responsabilités distinctes :
+
+- `CURRENT_STATE.md` : photographie opérationnelle concise de l'état actuel, pas un historique ;
+- `ROADMAP.md` : direction et jalons, en distinguant réalisé et prévu ;
+- `DECISIONS.md` : choix architecturaux et leur justification ;
+- `TASKS.md` : travail immédiat, sans recopier toute la roadmap.
+
+Les documents fondateurs restent les références détaillées faisant autorité dans
+leurs domaines respectifs. Ne pas les dupliquer dans la mémoire du projet.
+Une entrée de roadmap ou de tâches n'autorise pas, à elle seule, une implémentation.
+
+Après chaque jalon terminé, Codex doit :
+
+1. mettre à jour `project/CURRENT_STATE.md`, `project/ROADMAP.md` et `project/TASKS.md` ;
+2. mettre à jour `project/DECISIONS.md` uniquement si une décision architecturale a été introduite ou modifiée ;
+3. exécuter les validations/tests pertinents et distinguer résultats vérifiés et tests non exécutés ;
+4. rapporter les migrations créées/appliquées, ou explicitement leur absence ;
+5. rapporter les limitations et risques connus ;
+6. rapporter `git status --short` ;
+7. ne pas committer sans demande explicite.
+
+Ne pas ajouter aveuglément des paragraphes à `CURRENT_STATE.md` : remplacer les
+affirmations obsolètes pour qu'il représente toujours la réalité actuelle.
+Pour un jalon exclusivement Markdown, les contrôles de cohérence documentaire et
+`git diff --check` suffisent ; ne pas prétendre avoir réexécuté les tests applicatifs.
+
+---
+
 # 3. Mission du développeur IA
 
 Codex agit comme développeur du projet.
