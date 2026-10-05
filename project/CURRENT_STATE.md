@@ -41,24 +41,27 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
   OWNER/ADMIN/MANAGER lisent/écrivent CRM et opérations ; TECHNICIAN lit les données
   CRM opérationnelles, exécute ses interventions assignées et édite ses propres
   rapports brouillons, sans prospects/devis ; ACCOUNTANT lit CRM hors prospects,
-  devis/interventions, sans rapports ni mutations ; READ_ONLY consulte seulement.
+  devis/interventions, sans rapports ni mutations CRM/opérationnelles ; il possède
+  cependant invoices.read/write/issue. TECHNICIAN n’accède pas aux factures ;
+  READ_ONLY consulte seulement.
 - Écritures métier via services côté serveur, sans policies SQL d'écriture
   authenticated. Exception : `ai_settings` autorise INSERT/UPDATE OWNER/ADMIN du tenant.
   Service-role et secrets restent serveur ; `.env.local` et runtime sont ignorés.
 
 ## Base actuelle
 
-16 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
+18 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
 
 - Identité/CRM : `organizations`, `users`, `customers`, `contacts`, `customer_sites`,
   `leads`, `services`.
 - Opérations : `quotes`, `quote_items`, `jobs`, `job_reports`.
+- Facturation : `invoices`, `invoice_items`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Dix migrations 0000–0009 dans `packages/database/drizzle/`, seule source de migration
-applicative. 0008 ajoute approval_requests, enum lifecycle, FK tenant, index et RLS
-demandeur. Dernière : `0009_fixed_agent_brand.sql`, check des risques proposés 1/2
-selon TOOLS (planning/finalisation Risk 2). Appliquées au Supabase local,
+Onze migrations 0000–0010 dans `packages/database/drizzle/`, seule source de migration
+applicative. Dernière : `0010_confused_photon.sql`, deux tables de facturation,
+enum invoice_status, contraintes/FK tenant-client, index et RLS de lecture par rôle.
+Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
 CRM et devis/interventions. Le SQL custom des migrations porte aussi la sécurité
@@ -84,6 +87,15 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   traitement obligatoires à finalisation, rapport finalisé immuable. Finalisation
   requise avant fin d'intervention ; suivi recommandé flag/date, sans job automatique.
   Coûts/marges réels non calculés. Détails mobiles sans table horizontale.
+- Factures : création manuelle de brouillons, recherche/statut/pagination, lignes
+  éditables et totaux HT/TVA/TTC exacts via le moteur BigInt des devis. Numérotation
+  FAC-YYYY-000001 par tenant/année de date d’émission, verrou organisation/unique.
+  Émission explicite d’un brouillon non vide, lignes ensuite figées ; retry idempotent.
+  Annulation de brouillon seulement. Liens facultatifs devis accepté/intervention
+  terminée, client/tenant cohérents et états revalidés à l’émission. Pas de conversion
+  automatique ni de règle supposée « une facture par source ». Détails :
+  `docs/architecture/invoices.md`. Statuts paiement/envoi conservés dans l’enum
+  du domaine mais sans opérations correspondantes.
 
 ## Director et IA hybride
 
@@ -136,6 +148,7 @@ Cloud : sortie 1 500 tokens/tour. Aucune tarification monétaire inventée.
 
 Routes protégées : `/dashboard`, `/customers`, `/customers/[id]`, `/leads`, `/services`,
 `/quotes`, `/quotes/[id]`, `/jobs`, `/jobs/[id]`, `/assistant`, `/settings/ai`.
+Facturation protégée : `/invoices`, `/invoices/[id]`, dans le menu mobile secondaire.
 `/` redirige vers dashboard ; `/login` et `GET /api/health` sont publics.
 `POST /api/assistant` exige session, même origine et input Zod strict/borné.
 `GET/POST /api/assistant/proposals` liste les 20 dernières propositions propres et
@@ -167,8 +180,13 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
   omises ; assignment et auteur de rapport référencent des users, pas des employés.
   Un devis → un job ; un job → un rapport. Pas de split-visites, envoi de devis,
   photos/signatures, disponibilité RH/certifications, trajets ni coûts réels détaillés.
+- Facturation : pas encore de PDF/email/paiements/avoirs/export ou Billing Agent ;
+  corrections après émission et cardinalité de facturation partielle à cadrer.
+  Numéros réservés dès le brouillon ; règles fiscales/mentions/chronologie/rétention
+  à valider avant production. Aucun audit complet des mutations factures simulé.
+  Outils invoices.get/search préparés Risk 0, non enregistrés avec les agents.
 - Hors implémentation : autres spécialistes, autonomie/queues, mémoire IA/conversations
-  persistées, audit_logs/domain_events/tasks, factures/paiements/finance/Qonto,
+  persistées, audit_logs/domain_events/tasks, paiements/finance/Qonto,
   contrats/stocks/achats/RH, knowledge/pricing intelligence, voix et offline/PWA.
   MFA et onboarding avancé restent différés ; performance live Ollama dépend du matériel.
 
@@ -176,19 +194,23 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
 
 Suites présentes : Vitest métier/calculs/permissions/routage/providers mockés ;
 intégration locale DB/Auth/services (RLS, UUID connus, FK, numérotation/concurrence,
-atomicité, approvals/concurrence/révocation/stale/conflicts) ; quatre scénarios
-Playwright CRM, Assistant/settings, devis → job → rapport mobile et approbation mobile.
+atomicité, approvals/concurrence/révocation/stale/conflicts, facturation/RLS/calculs) ;
+scénarios Playwright CRM, Assistant/settings, devis → job → rapport mobile,
+approbation mobile et brouillon → édition → émission de facture mobile.
 `pnpm test` ne nécessite aucun runtime externe ; `pnpm test:integration` et
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation spécialistes au 2026-10-05 : lint,
-typecheck, build, 160 tests unitaires, 47 tests d'intégration locale et quatre E2E
-passent. Les deux migrations locales ont un second passage sûr via tracking.
+`supabase:start/stop/status`. Validation factures au 2026-10-05 : lint,
+typecheck, build, 167 tests unitaires, 56 tests d’intégration locale et cinq E2E
+passent. Migration 0010 appliquée localement, second passage sûr via tracking.
+Six tests métier de facturation et un test d’émission ajoutés ; neuf intégrations
+factures et un E2E mobile, sans appel réel aux providers IA.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
-la suite live optionnelle a un échec sur son ancien smoke CRM (timeout local 35 s).
+la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
+(timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
 
-Prochain jalon : consolidation des evals spécialistes, audit/consultation des traces
-et protection/rétention des approvals avant toute autonomie ou extension d'agents.
+Prochain jalon : cadrer les règles de facturation source/corrections/conformité avant
+extension financière ; consolider evals/audit/protection des approvals sans autonomie accrue.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

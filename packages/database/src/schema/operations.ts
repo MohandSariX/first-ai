@@ -26,6 +26,7 @@ export const quotes = pgTable("quotes", {
   createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"), notes: text("notes"), ...timestamps(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, t => [
   unique("quotes_org_number_unique").on(t.organizationId, t.quoteNumber), unique("quotes_id_org_unique").on(t.id, t.organizationId), unique("quotes_id_customer_site_org_unique").on(t.id, t.customerId, t.siteId, t.organizationId),
+  unique("quotes_id_customer_org_unique").on(t.id, t.customerId, t.organizationId),
   foreignKey({ name: "quotes_customer_org_fk", columns: [t.customerId, t.organizationId], foreignColumns: [customers.id, customers.organizationId] }),
   foreignKey({ name: "quotes_site_customer_org_fk", columns: [t.siteId, t.customerId, t.organizationId], foreignColumns: [customerSites.id, customerSites.customerId, customerSites.organizationId] }),
   foreignKey({ name: "quotes_creator_org_fk", columns: [t.createdByUserId, t.organizationId], foreignColumns: [users.id, users.organizationId] }),
@@ -55,6 +56,7 @@ export const jobs = pgTable("jobs", {
   description: text("description").notNull(), internalNotes: text("internal_notes"), customerNotes: text("customer_notes"), createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"), ...timestamps(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, t => [
   unique("jobs_id_org_unique").on(t.id, t.organizationId), unique("jobs_quote_org_unique").on(t.quoteId, t.organizationId),
+  unique("jobs_id_customer_org_unique").on(t.id, t.customerId, t.organizationId),
   foreignKey({ name: "jobs_customer_org_fk", columns: [t.customerId, t.organizationId], foreignColumns: [customers.id, customers.organizationId] }),
   foreignKey({ name: "jobs_site_customer_org_fk", columns: [t.siteId, t.customerId, t.organizationId], foreignColumns: [customerSites.id, customerSites.customerId, customerSites.organizationId] }),
   foreignKey({ name: "jobs_quote_customer_site_org_fk", columns: [t.quoteId, t.customerId, t.siteId, t.organizationId], foreignColumns: [quotes.id, quotes.customerId, quotes.siteId, quotes.organizationId] }),

@@ -8,6 +8,7 @@ export const navigationItems = [
   { href: "/services", label: "Prestations", short: "Services", icon: "▦", permission: "services.read" },
   { href: "/quotes", label: "Devis", short: "Devis", icon: "▤", permission: "quotes.read" },
   { href: "/jobs", label: "Interventions", short: "Terrain", icon: "◷", permission: "jobs.read" },
+  { href: "/invoices", label: "Factures", short: "Factures", icon: "▤", permission: "invoices.read" },
 ] as const;
 
 export function getNavigationItems(role: UserRole) {

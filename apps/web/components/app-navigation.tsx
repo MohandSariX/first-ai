@@ -11,8 +11,9 @@ import { getNavigationItems } from "../lib/navigation";
 export function AppNavigation({ userName, role }: { readonly userName: string; readonly role: UserRole }) {
   const pathname = usePathname();
   const visibleLinks = getNavigationItems(role);
-  const primaryLinks = visibleLinks.filter(link => link.href !== "/services" && link.href !== "/quotes");
-  const secondaryLinks = visibleLinks.filter(link => link.href === "/services" || link.href === "/quotes");
+  const secondaryRoutes: readonly string[] = ["/services", "/quotes", "/invoices"];
+  const primaryLinks = visibleLinks.filter(link => !secondaryRoutes.includes(link.href));
+  const secondaryLinks = visibleLinks.filter(link => secondaryRoutes.includes(link.href));
   const active = (href: string) => pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
   return <>
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-neutral-200 bg-white px-4 py-6 lg:flex lg:flex-col">

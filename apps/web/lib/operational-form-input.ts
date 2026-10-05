@@ -1,6 +1,7 @@
 import { acceptQuoteSchema, addQuoteItemSchema, assignTechnicianSchema, createDraftJobSchema, createDraftQuoteSchema, createJobReportSchema, scheduleJobSchema, updateDraftQuoteSchema, updateJobReportSchema, updateQuoteItemSchema } from "@first-ai/schemas";
 import { z } from "zod";
-export const operationSchema = z.enum(["quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
+import { createDraftInvoiceSchema, addInvoiceItemSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
+export const operationSchema = z.enum(["invoice.create", "invoice.addItem", "invoice.updateItem", "invoice.removeItem", "invoice.issue", "invoice.cancel", "quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
 export type Operation = z.infer<typeof operationSchema>;
 export function formText(form: FormData, key: string): string { const v = form.get(key); return typeof v === "string" ? v.trim() : ""; }
 const optional = (f: FormData, k: string) => formText(f, k) || undefined;
@@ -8,6 +9,11 @@ const itemInput = (f: FormData) => ({ serviceId: optional(f, "serviceId") ?? nul
 // The same schemas validate the browser form and the server action, before service validation.
 export function parseOperationalForm(operation: Operation, f: FormData) {
   switch (operation) {
+    case "invoice.create": return createDraftInvoiceSchema.parse({ customerId: formText(f, "customerId"), issueDate: formText(f, "issueDate"), dueDate: formText(f, "dueDate"), quoteId: optional(f, "sourceQuoteId"), jobId: optional(f, "sourceJobId"), notes: optional(f, "notes"), internalNotes: optional(f, "internalNotes") });
+    case "invoice.addItem": case "invoice.updateItem": {
+      const item = { serviceId: optional(f, "serviceId") ?? null, description: formText(f, "description"), quantity: formText(f, "quantity"), unitPrice: formText(f, "unitPrice"), taxRate: formText(f, "taxRate"), sortOrder: Number(formText(f, "sortOrder") || "0") };
+      return (operation === "invoice.addItem" ? addInvoiceItemSchema : updateInvoiceItemSchema).parse(item);
+    }
     case "quote.create": return createDraftQuoteSchema.parse({ customerId: formText(f, "customerId"), siteId: formText(f, "siteId"), validUntil: optional(f, "validUntil"), notes: optional(f, "notes") });
     case "quote.update": return updateDraftQuoteSchema.parse({ validUntil: optional(f, "validUntil"), notes: optional(f, "notes") });
     case "quote.addItem": return addQuoteItemSchema.parse(itemInput(f));

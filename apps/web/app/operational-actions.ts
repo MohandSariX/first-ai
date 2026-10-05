@@ -14,8 +14,18 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
     const operation = operationSchema.parse(formText(form, "operation"));
     const input = parseOperationalForm(operation, form);
     const quoteId = formText(form, "quoteId"), jobId = formText(form, "jobId");
-    await withCrm(async ({ context, quotes, jobs, reports }) => {
+    const invoiceId = formText(form, "invoiceId");
+    await withCrm(async ({ context, quotes, jobs, reports, invoices }) => {
       switch (operation) {
+        case "invoice.create": destination = `/invoices/${(await invoices.createDraftInvoice(context, input)).id}`; break;
+        case "invoice.addItem": await invoices.addInvoiceItem(context, invoiceId, input); break;
+        case "invoice.updateItem": await invoices.updateInvoiceItem(context, invoiceId, formText(form, "itemId"), input); break;
+        case "invoice.removeItem": await invoices.removeInvoiceItem(context, invoiceId, formText(form, "itemId")); break;
+        case "invoice.issue": {
+          if (form.get("confirmed") !== "on") throw new z.ZodError([{ code: "custom", path: ["confirmed"], message: "Confirmez l’émission : les lignes seront figées." }]);
+          await invoices.issueInvoice(context, invoiceId); break;
+        }
+        case "invoice.cancel": await invoices.cancelInvoice(context, invoiceId); break;
         case "quote.create": destination = `/quotes/${(await quotes.createDraftQuote(context, input)).id}`; break;
         case "quote.update": await quotes.updateDraftQuote(context, quoteId, input); break;
         case "quote.addItem": await quotes.addQuoteItem(context, quoteId, input); break;
@@ -39,7 +49,7 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
         case "report.complete": await reports.completeJobReport(context, jobId); break;
       }
     });
-    for (const path of ["/quotes", "/jobs", "/dashboard", ...(quoteId ? [`/quotes/${quoteId}`] : []), ...(jobId ? [`/jobs/${jobId}`] : [])]) revalidatePath(path);
+    for (const path of ["/invoices", ...(invoiceId ? [`/invoices/${invoiceId}`] : []), "/quotes", "/jobs", "/dashboard", ...(quoteId ? [`/quotes/${quoteId}`] : []), ...(jobId ? [`/jobs/${jobId}`] : [])]) revalidatePath(path);
   } catch (error) {
     if (error instanceof z.ZodError) return { success: false, message: "Vérifiez les champs indiqués.", fieldErrors: error.flatten().fieldErrors };
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";

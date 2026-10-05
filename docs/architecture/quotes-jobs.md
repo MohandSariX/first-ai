@@ -13,7 +13,8 @@ Their future foreign-key columns are intentionally omitted: `opportunity_id`,
 active First AI TECHNICIAN user, and `job_reports.technician_id` references the
 First AI user who authored the report. These are explicitly user identities, not
 employee identities; a future employee phase needs an additive, reviewed mapping.
-There are no signatures, uploads, stock usage, invoices or payments.
+There are no signatures, uploads, stock usage or payments. The separate
+[invoice foundation](invoices.md) supports explicit customer/quote/job references.
 Supervised specialist agents now reuse these services through
 [human-approved proposals](../agents/specialists-v1.md), without direct AI writes.
 
@@ -52,7 +53,7 @@ calendar year. A transaction locks the organization's row before allocating the
 next number. A unique organization/number constraint provides a final safeguard.
 Soft-deleted numbers remain reserved; there is no fifth sequence table. This
 serializes allocation across application instances. Current capacity is 999,999
-quotes per organization/year; there is no invoice numbering implementation.
+quotes per organization/year; invoices now use their separate FAC numbering allocation.
 
 Item mutations lock the quote row and only accept drafts. A non-empty, unexpired
 draft can become ready. Ready/sent/viewed quotes can be manually accepted or

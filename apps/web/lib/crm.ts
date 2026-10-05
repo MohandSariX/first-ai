@@ -8,6 +8,7 @@ import {
   LeadRepository,
   ServiceRepository,
   OperationalStore,
+  InvoiceStore,
 } from "@first-ai/database";
 import {
   ContactService,
@@ -18,6 +19,7 @@ import {
   LeadSummaryService,
   ServiceCatalogService,
   QuoteService, JobService, JobReportService,
+  InvoiceService,
 } from "@first-ai/tools";
 
 import { requireBusinessUser } from "./auth";
@@ -50,5 +52,6 @@ export async function createCrm(providedContext?: CurrentBusinessUser) {
     quotes: new QuoteService(operationalStore),
     jobs: new JobService(operationalStore),
     reports: new JobReportService(operationalStore),
+    invoices: new InvoiceService(new InvoiceStore(database)),
   };
 }

@@ -38,7 +38,7 @@ export default async function globalSetup() {
   if (siteFixture.error) throw new Error(siteFixture.error.message);
 
   return async () => {
-    for (const table of ["approval_requests", "job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
+    for (const table of ["invoice_items", "invoices", "approval_requests", "job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
       const cleanup = await admin.from(table).delete().eq("organization_id", organizationId);
       if (cleanup.error !== null) throw new Error(cleanup.error.message);
     }

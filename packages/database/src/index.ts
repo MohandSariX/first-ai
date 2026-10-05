@@ -5,3 +5,4 @@ export { AgentObservabilityRepository } from "./repositories/agent-observability
 export { AiSettingsRepository } from "./repositories/ai-settings.js";
 export * from "./repositories/operations.js";
 export * from "./repositories/approvals.js";
+export * from "./repositories/invoices.js";

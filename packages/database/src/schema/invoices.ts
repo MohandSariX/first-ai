@@ -1,0 +1,46 @@
+import { sql } from "drizzle-orm";
+import { check, date, foreignKey, index, integer, numeric, pgEnum, pgPolicy, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import { INVOICE_STATUSES } from "@first-ai/schemas";
+import { organizations } from "./organizations.js";
+import { customers } from "./customers.js";
+import { quotes, jobs } from "./operations.js";
+import { users } from "./users.js";
+import { agents } from "./agent-observability.js";
+import { services } from "./services.js";
+
+export const invoiceStatusEnum = pgEnum("invoice_status", INVOICE_STATUSES);
+const amount = (name: string) => numeric(name, { precision: 14, scale: 2 });
+const timestamps = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
+// Contract/payment/delivery/accounting fields remain deferred, not simulated.
+export const invoices = pgTable("invoices", {
+  id: uuid("id").primaryKey().defaultRandom(), organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  invoiceNumber: varchar("invoice_number", { length: 40 }).notNull(), status: invoiceStatusEnum("status").notNull().default("draft"),
+  customerId: uuid("customer_id").notNull(), quoteId: uuid("quote_id"), jobId: uuid("job_id"),
+  issueDate: date("issue_date").notNull(), dueDate: date("due_date").notNull(), issuedAt: timestamp("issued_at", { withTimezone: true }),
+  subtotal: amount("subtotal").notNull().default("0"), taxAmount: amount("tax_amount").notNull().default("0"), total: amount("total").notNull().default("0"),
+  notes: text("notes"), internalNotes: text("internal_notes"), createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"),
+  ...timestamps(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, t => [
+  unique("invoices_org_number_unique").on(t.organizationId, t.invoiceNumber), unique("invoices_id_org_unique").on(t.id, t.organizationId),
+  foreignKey({ name: "invoices_customer_org_fk", columns: [t.customerId, t.organizationId], foreignColumns: [customers.id, customers.organizationId] }),
+  foreignKey({ name: "invoices_quote_customer_org_fk", columns: [t.quoteId, t.customerId, t.organizationId], foreignColumns: [quotes.id, quotes.customerId, quotes.organizationId] }),
+  foreignKey({ name: "invoices_job_customer_org_fk", columns: [t.jobId, t.customerId, t.organizationId], foreignColumns: [jobs.id, jobs.customerId, jobs.organizationId] }),
+  foreignKey({ name: "invoices_creator_org_fk", columns: [t.createdByUserId, t.organizationId], foreignColumns: [users.id, users.organizationId] }),
+  foreignKey({ name: "invoices_agent_org_fk", columns: [t.createdByAgentId, t.organizationId], foreignColumns: [agents.id, agents.organizationId] }),
+  check("invoices_dates_check", sql`${t.dueDate} >= ${t.issueDate}`),
+  check("invoices_totals_check", sql`${t.subtotal} >= 0 and ${t.taxAmount} >= 0 and ${t.total} = ${t.subtotal} + ${t.taxAmount}`),
+  check("invoices_issued_check", sql`${t.status} in ('draft', 'cancelled') or ${t.issuedAt} is not null`),
+  index("invoices_org_status_due_idx").on(t.organizationId, t.status, t.dueDate), index("invoices_org_customer_idx").on(t.organizationId, t.customerId),
+  pgPolicy("invoices_select_own", { for: "select", to: "authenticated", using: sql`organization_id = (select public.current_organization_id()) and deleted_at is null and exists (select 1 from public.users where auth_user_id = (select auth.uid()) and role in ('OWNER','ADMIN','MANAGER','ACCOUNTANT','READ_ONLY'))` }),
+]).enableRLS();
+
+export const invoiceItems = pgTable("invoice_items", {
+  id: uuid("id").primaryKey().defaultRandom(), organizationId: uuid("organization_id").notNull().references(() => organizations.id), invoiceId: uuid("invoice_id").notNull(), serviceId: uuid("service_id"),
+  description: text("description").notNull(), quantity: numeric("quantity", { precision: 9, scale: 3 }).notNull(), unitPrice: amount("unit_price").notNull(), taxRate: numeric("tax_rate", { precision: 6, scale: 3 }).notNull(), sortOrder: integer("sort_order").notNull().default(0), ...timestamps(),
+}, t => [
+  foreignKey({ name: "invoice_items_invoice_org_fk", columns: [t.invoiceId, t.organizationId], foreignColumns: [invoices.id, invoices.organizationId] }).onDelete("cascade"),
+  foreignKey({ name: "invoice_items_service_org_fk", columns: [t.serviceId, t.organizationId], foreignColumns: [services.id, services.organizationId] }),
+  check("invoice_items_values_check", sql`${t.quantity} > 0 and ${t.unitPrice} >= 0 and ${t.taxRate} between 0 and 100 and ${t.sortOrder} between 0 and 200`),
+  index("invoice_items_org_invoice_order_idx").on(t.organizationId, t.invoiceId, t.sortOrder),
+  pgPolicy("invoice_items_select_invoice", { for: "select", to: "authenticated", using: sql`organization_id = (select public.current_organization_id()) and exists (select 1 from public.invoices where id = invoice_items.invoice_id and organization_id = invoice_items.organization_id)` }),
+]).enableRLS();
