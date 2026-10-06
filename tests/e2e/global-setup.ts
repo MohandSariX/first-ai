@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { e2eFixture } from "./fixture";
+import { fictionalInvoiceTerms } from "../../packages/tools/src/test-invoice-mentions";
 
 function requireLocal(name: string): string {
   const value = process.env[name];
@@ -23,6 +24,8 @@ export default async function globalSetup() {
   const authUserId = authResult.data.user.id;
   const organizationResult = await admin.from("organizations").insert({ id: organizationId, name: e2eFixture.organizationName, legal_name: "Vendeur Fictif E2E", address_line1: "1 Rue Fictive", postal_code: "75001", city: "Paris", legal_entity_type: "company", legal_form: "SAS", registration: "RCS Paris (fictif)", share_capital: "1000", siren: "123456789", vat_number: "FR00123456789", vat_regime: "normal", vat_on_debits: false });
   if (organizationResult.error !== null) throw new Error(organizationResult.error.message);
+  const termsResult = await admin.from("organizations").update({ invoice_terms: fictionalInvoiceTerms }).eq("id", organizationId);
+  if (termsResult.error) throw termsResult.error;
   const userResult = await admin.from("users").insert({ id: businessUserId, organization_id: organizationId, auth_user_id: authUserId, first_name: "Utilisateur", last_name: "E2E", email: e2eFixture.email, role: "OWNER" });
   if (userResult.error !== null) throw new Error(userResult.error.message);
   // Keep deterministic E2E off both live AI providers. Missing-key checks use cloud-only.

@@ -58,11 +58,13 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 - Facturation : `invoices`, `invoice_items`, `payments`, `invoice_number_counters` (privée).
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Seize migrations 0000–0015 dans `packages/database/drizzle/`, seule source de migration
+Dix-sept migrations 0000–0016 dans `packages/database/drizzle/`, seule source de migration
 applicative. M2 : `0014_strange_enchantress.sql` ajoute référence interne et compteur
 transactionnel, nullable numéro/date avant issue et protections SQL ; dernière
 `0015_fix_invoice_allocator_conflict.sql` corrige la cible ON CONFLICT sans réécrire
-0014 déjà appliquée. Snapshot v3 obligatoire aux nouvelles émissions ; identités
+0014 déjà appliquée. M3 `0016_striped_vivisector.sql` ajoute données métier/termes
+JSONB, unité/type/remise des lignes et protections SQL, sans table nouvelle.
+Snapshot v4 obligatoire aux nouvelles émissions ; identités
 et classification M1 conservées. Aucun backfill des snapshots historiques.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
@@ -105,8 +107,15 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   `docs/architecture/invoices.md`. Envoi/perte conservés dans l’enum sans opérations.
 - Document facture : snapshot Zod/versionné figé atomiquement à l’émission avec
   identités vendeur/client, lignes, dates, numéro, notes client, totaux et TVA par taux.
-  V3 capture identités fiscales/de facturation, classification explicite et metadata
-  d’émission (instant/fuseau/année) ; V1/V2 restent lisibles, inchangés.
+  V4 capture identités/classification, metadata d’émission, dates métier/commande,
+  unités/remises/frais, motif TVA et termes effectivement applicables ; V1/V2/V3
+  restent lisibles, inchangés. Date/période achevée confirmée explicitement, sans
+  inférence job/site/paiement ; lieu B2C services et livraison biens/mixte distincte.
+  Remise HT acquise par ligne et frais positifs avec TVA propre, calculs BigInt.
+  Configuration vendeur : échéance explicite ou jours depuis émission/exécution,
+  escompte/pénalités/40 EUR seulement B2B, conditions publiques distinctes B2G.
+  Données manquantes bloquent l’émission et rollback le numéro M2. Détails :
+  [mentions M3](../docs/architecture/invoice-mentions.md).
   Profil vendeur dans `/settings/billing` (OWNER/ADMIN write),
   identité/adresse client dédiée dans sa fiche (rôles invoices.write autorisés),
   classification B2B/B2C/B2G, services/goods/mixed et traitement TVA dans le brouillon.
@@ -225,9 +234,10 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
   ni audit/rétention fiscale complet contre administration privilégiée.
   Pas d’email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
-  Audit fiscal français documentaire terminé au 2026-10-05 ; M1/M2 implémentés,
+  Audit fiscal français documentaire terminé au 2026-10-05 ; M1–M3 implémentés,
   conformité non établie. Numéro/date à l’émission protégés dans le workflow serveur,
-  mais historique non renuméroté et séries/émetteurs à qualifier. Mentions/TVA légales complètes, corrections/avoirs
+  mais historique non renuméroté et séries/émetteurs à qualifier. Acomptes, exceptions
+  sectorielles/internationales, clauses publiques et cas particuliers non couverts ; corrections/avoirs
   et conservation originale restent à implémenter/valider.
   Aucune plateforme de réception/émission ni e-reporting ; qualification fiscale
   de l’émetteur et du suivi encaissement B2C requise avant production.
@@ -255,24 +265,21 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation finale M2 au 2026-10-06 : lint, typecheck,
-188 tests unitaires, 75 intégrations locales, build et 7 E2E passent.
-Les premières reprises E2E ont rencontré une suspension réseau navigateur et des
-timeouts serveur/actions ; la dernière exécution complète passe sans modification
-du code ni des attentes. Cette instabilité locale reste à surveiller.
-Migrations 0014/0015 appliquées localement, seconds passages sûrs via tracking.
-Tests : M1 conservé, émission inversée/concurrente, rollback/retry/abandon,
-compteurs privés, numéro/date immuables et série annuelle/fuseau. PDF v3 réel.
-PDFs v1/v2 compatibles (tests de lecture/rendu) ; contrôle visuel v3 terminé,
-FAC/date civile définitifs affichés, sans référence brouillon comme numéro fiscal.
-Aucun provider IA.
+`supabase:start/stop/status`. Validation M3 au 2026-10-06 : lint, typecheck,
+197 tests unitaires, 76 intégrations locales, build et 7 E2E passent.
+Migration 0016 appliquée localement, second passage sûr via tracking ; 0014/0015 inchangées.
+Tests : M1/M2 conservés, scénarios M3/TVA/remises/frais, rollback sans numéro,
+termes/dates figés, membership/rôle courant et refus UUID étranger.
+PDF v4 réel vérifié en texte et visuellement : dates/commande/unités/termes,
+FAC/date définitifs, TVA multiple, aucun numéro brouillon. V1/v2/v3 restent lisibles.
+Aucun provider IA exécuté pour M3.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
-Prochain jalon technique : **M3, mentions applicables et dates métier du document**.
+Prochain jalon technique : **M4, avoirs/rectificatifs et soldes corrigés**.
 Qualification M0 de l’émetteur/flux et obligations déjà applicables reste nécessaire ;
-M1/M2 ne la réalisent pas automatiquement. Mentions M3, avoirs, rétention/Unicode
+M1–M3 ne la réalisent pas automatiquement. Avoirs, rétention/Unicode
 et intégration électronique restent des jalons distincts, selon priorité applicable.
 Le plan détaillé est dans l’audit ; aucun connecteur électronique n’est livré.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

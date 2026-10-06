@@ -1,6 +1,7 @@
 import { invoiceDocumentSnapshotSchema, sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema, validateBillingScenario, type InvoiceDocumentSnapshot } from "@first-ai/schemas";
 import type { Invoice, InvoiceItem, InvoiceSession } from "@first-ai/database";
-import { calculateQuoteTotals } from "./quote-calculation.js";
+import { calculateInvoiceLine, calculateInvoiceAmounts } from "./invoice-calculation.js";
+import { captureInvoiceMentions } from "./invoice-mentions.js";
 import { OperationalConflictError } from "./operational-policies.js";
 
 type Identity = Awaited<ReturnType<InvoiceSession["billingIdentity"]>>;
@@ -17,17 +18,19 @@ export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly 
   const gaps = validateBillingScenario(fiscalIdentity.data, billingIdentity.data, classification.data, items.map(i => i.taxRate));
   if (gaps.length) throw new OperationalConflictError(`Émission impossible : ${gaps.join(" ")}`);
   const billing = billingIdentity.data;
+  if (!invoice.issueDate) throw new OperationalConflictError("Date d’émission indisponible.");
+  const mentions = captureInvoiceMentions({ businessDetails: invoice.businessDetails, terms: seller.invoiceTerms, classification: classification.data, issueDate: invoice.issueDate, dueDate: invoice.dueDate });
   const lines = items.map(item => {
-    const { subtotal, taxAmount, total } = calculateQuoteTotals([{ ...item, costEstimate: "0" }]);
+    const amounts = calculateInvoiceLine(item);
     const [whole = "0", fraction = ""] = item.taxRate.split(".");
-    return { description: item.description, quantity: item.quantity, unitPrice: item.unitPrice,
-      taxRate: `${BigInt(whole)}.${fraction.padEnd(3, "0")}`, subtotal, taxAmount, total };
+    return { description: item.description, quantity: item.quantity, unitPrice: item.unitPrice, unit: item.unit, kind: item.kind,
+      taxRate: `${BigInt(whole)}.${fraction.padEnd(3, "0")}`, ...amounts };
   });
   const groups = new Map<string, { base: bigint; amount: bigint }>();
   for (const line of lines) { const g = groups.get(line.taxRate) ?? { base: 0n, amount: 0n }; g.base += cents(line.subtotal); g.amount += cents(line.taxAmount); groups.set(line.taxRate, g); }
-  const { subtotal, taxAmount, total } = calculateQuoteTotals(items.map(i => ({ ...i, costEstimate: "0" })));
+  const { subtotal, taxAmount, total } = calculateInvoiceAmounts(items);
   return invoiceDocumentSnapshotSchema.parse({
-    version: 3, issuance, organizationId: invoice.organizationId, invoiceId: invoice.id,
+    version: 4, issuance, ...mentions, organizationId: invoice.organizationId, invoiceId: invoice.id,
     capturedAt: capturedAt.toISOString(), currency: seller.currency,
     seller: { name: seller.name, legalName: seller.legalName, addressLine1: seller.addressLine1, addressLine2: seller.addressLine2, postalCode: seller.postalCode, city: seller.city, country: seller.country, siret: seller.siret, vatNumber: seller.vatNumber, email: seller.email, phone: seller.phone, fiscalIdentity: fiscalIdentity.data },
     customer: { name: billing.billingName, legalName: billing.billingLegalName, addressLine1: billing.billingAddressLine1, addressLine2: billing.billingAddressLine2, postalCode: billing.billingPostalCode, city: billing.billingCity, country: billing.billingCountry, siret: billing.siret, vatNumber: billing.vatNumber, email: customer.billingEmail, phone: customer.phone, billingIdentity: billing },

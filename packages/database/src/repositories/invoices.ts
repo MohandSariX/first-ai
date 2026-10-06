@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import type { CreateDraftInvoiceInput, SellerBillingInput, CustomerBillingInput, InvoiceClassification } from "@first-ai/schemas";
+import type { CreateDraftInvoiceInput, SellerBillingInput, CustomerBillingInput, InvoiceClassification, SellerInvoiceTerms } from "@first-ai/schemas";
 import type { createDatabaseClient } from "../client.js";
 import { customers, invoices, invoiceItems, organizations, users } from "../schema/index.js";
 import { RepositorySession } from "./operations.js";
@@ -37,10 +37,10 @@ export class InvoiceRepository {
     const allocation = row(result[0]);
     return { invoiceNumber: allocation.number, issueDate: allocation.issue_date, issuedAt: new Date(allocation.issued_at), timeZone: allocation.time_zone, fiscalYear: allocation.fiscal_year };
   }
-  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "invoiceNumber" | "issueDate" | "status" | "issuedAt" | "subtotal" | "taxAmount" | "total" | "amountPaid" | "amountDue" | "paidAt" | "documentSnapshot">> & Partial<InvoiceClassification>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
+  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "invoiceNumber" | "issueDate" | "status" | "issuedAt" | "subtotal" | "taxAmount" | "total" | "amountPaid" | "amountDue" | "paidAt" | "documentSnapshot" | "businessDetails">> & Partial<InvoiceClassification>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
   async items(s: InvoiceScope) { return this.db.select().from(invoiceItems).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId))).orderBy(invoiceItems.sortOrder, invoiceItems.createdAt, invoiceItems.id).limit(201); }
   async addItem(s: InvoiceScope, input: Omit<typeof invoiceItems.$inferInsert, "id" | "organizationId" | "invoiceId" | "createdAt" | "updatedAt">) { return row((await this.db.insert(invoiceItems).values({ ...input, ...s }).returning())[0]); }
-  async updateItem(s: InvoiceScope, itemId: string, input: Partial<Pick<InvoiceItem, "serviceId" | "description" | "quantity" | "unitPrice" | "taxRate" | "sortOrder">>) { return (await this.db.update(invoiceItems).set({ ...input, updatedAt: new Date() }).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId), eq(invoiceItems.id, itemId))).returning())[0]; }
+  async updateItem(s: InvoiceScope, itemId: string, input: Partial<Pick<InvoiceItem, "serviceId" | "description" | "quantity" | "unitPrice" | "taxRate" | "sortOrder" | "unit" | "kind" | "discountAmount">>) { return (await this.db.update(invoiceItems).set({ ...input, updatedAt: new Date() }).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId), eq(invoiceItems.id, itemId))).returning())[0]; }
   async removeItem(s: InvoiceScope, itemId: string) { return (await this.db.delete(invoiceItems).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId), eq(invoiceItems.id, itemId))).returning())[0]; }
 }
 
@@ -59,6 +59,7 @@ export class InvoiceSession extends RepositorySession {
     return { seller, customer };
   }
   async sellerIdentity(organizationId: string) { return (await this.invoiceDb.select().from(organizations).where(and(eq(organizations.id, organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).limit(1))[0]; }
+  async updateInvoiceTerms(organizationId: string, invoiceTerms: SellerInvoiceTerms) { return (await this.invoiceDb.update(organizations).set({ invoiceTerms, updatedAt: new Date() }).where(and(eq(organizations.id, organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).returning())[0]; }
   async updateSellerIdentity(organizationId: string, input: SellerBillingInput) { return (await this.invoiceDb.update(organizations).set({ ...input, updatedAt: new Date() }).where(and(eq(organizations.id, organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).returning())[0]; }
   async customerIdentity(organizationId: string, customerId: string) { return (await this.invoiceDb.select().from(customers).where(and(eq(customers.organizationId, organizationId), eq(customers.id, customerId), isNull(customers.deletedAt))).limit(1))[0]; }
   async updateCustomerIdentity(organizationId: string, customerId: string, input: CustomerBillingInput) { return (await this.invoiceDb.update(customers).set({ ...input, updatedAt: new Date() }).where(and(eq(customers.organizationId, organizationId), eq(customers.id, customerId), isNull(customers.deletedAt))).returning())[0]; }

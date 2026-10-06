@@ -5,20 +5,20 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun jalon en cours : M2 finalisé, validations locales et PDF v3 vérifiés.
+- Aucun jalon en cours : M3 technique terminé, sans certification fiscale.
 
 ## NEXT
 
 1. Valider le périmètre fiscal applicable (M0 de l’[audit](../docs/compliance/france-invoicing-audit.md)) :
    vendeur/TVA/clientèle, réception électronique déjà due et champ encaissement B2C.
-2. M3 : mentions conditionnelles, dates d’opération/acompte et règlement, sur mission explicite.
-   M1/M2 livrés sans certification ; ne pas activer la facturation fiscale production.
+2. M4 : cadrer avoirs/rectificatifs et effet sur soldes, sur mission explicite.
+   M1–M3 livrés sans certification ; acomptes/exceptions non couverts. Ne pas activer la facturation fiscale production.
 3. Garder Director read-only et les spécialistes supervisés ; aucun élargissement
    d'autonomie, d'actions allowlistées ou d'approbateurs sans mission explicite.
 
 ## LATER
 
-- Mentions, avoirs, audit/rétention, Unicode et connecteur électronique : jalons distincts
+- Avoirs, audit/rétention, Unicode et connecteur électronique : jalons distincts
   de ROADMAP ; ne pas différer une obligation déjà applicable sous prétexte de cet ordre.
 - Evals spécialistes et rétention/contrôle d’abus des approvals.
 - Audit/événements/traces UI, puis voix/PWA terrain.

@@ -17,6 +17,8 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
     const invoiceId = formText(form, "invoiceId");
     await withCrm(async ({ context, quotes, jobs, reports, invoices, payments, billing }) => {
       switch (operation) {
+        case "billing.terms": await billing.updateInvoiceTerms(context, input); break;
+        case "invoice.business": await invoices.updateBusinessDetails(context, invoiceId, input); break;
         case "billing.seller": await billing.updateSeller(context, input); break;
         case "billing.customer": await billing.updateCustomer(context, formText(form, "customerId"), input); break;
         case "invoice.classify": await invoices.updateClassification(context, invoiceId, input); break;

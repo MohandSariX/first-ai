@@ -113,6 +113,13 @@
       "when": 1791224904345,
       "tag": "0015_fix_invoice_allocator_conflict",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791301290202,
+      "tag": "0016_striped_vivisector",
+      "breakpoints": true
     }
   ]
 }

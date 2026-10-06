@@ -1,16 +1,15 @@
 import { hasPermission, type CurrentBusinessUser, type Permission } from "@first-ai/auth";
 import type { Invoice, InvoiceScope, InvoiceStoreInterface } from "@first-ai/database";
-import { addInvoiceItemSchema, createDraftInvoiceSchema, invoiceClassificationSchema, invoiceDocumentSnapshotSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
+import { addInvoiceItemSchema, createDraftInvoiceSchema, invoiceClassificationSchema, invoiceDocumentSnapshotSchema, invoiceBusinessDetailsSchema, searchInvoicesSchema, updateInvoiceItemSchema } from "@first-ai/schemas";
 import { z } from "zod";
 import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
-import { calculateQuoteTotals } from "./quote-calculation.js";
+import { calculateInvoiceAmounts, type InvoiceCalculationItem } from "./invoice-calculation.js";
 import { createInvoiceDocumentSnapshot, invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 
-export function calculateInvoiceTotals(items: readonly { quantity: string; unitPrice: string; taxRate: string }[]) {
+export function calculateInvoiceTotals(items: readonly InvoiceCalculationItem[]) {
   if (items.length > 200) throw new OperationalConflictError("Maximum 200 lignes par facture.");
-  const { subtotal, taxAmount, total } = calculateQuoteTotals(items.map(item => ({ ...item, costEstimate: "0" })));
-  return { subtotal, taxAmount, total };
+  return calculateInvoiceAmounts(items);
 }
 // Manual invoice transitions only. PaymentService separately derives settlement states.
 export function assertInvoiceTransition(from: Invoice["status"], to: Invoice["status"]) {
@@ -43,6 +42,14 @@ export class InvoiceService {
       authorize({ ...c, role: member.role }, "invoices.write");
       draft(found(await s.invoices.get(sc, true)));
       return found(await s.invoices.update(sc, parsed));
+    });
+  }
+  async updateBusinessDetails(c: CurrentBusinessUser, id: string, input: unknown) {
+    authorize(c, "invoices.write"); const businessDetails = invoiceBusinessDetailsSchema.parse(input), sc = scope(c, id);
+    return this.store.transaction(async s => {
+      const member = await s.membership(c); if (!member) throw new AuthorizationError("Adhésion inactive.");
+      authorize({ ...c, role: member.role }, "invoices.write"); draft(found(await s.invoices.get(sc, true)));
+      return found(await s.invoices.update(sc, { businessDetails }));
     });
   }
   private async persist(s: Pick<InvoiceStoreInterface, "invoices">, sc: InvoiceScope) { const totals = calculateInvoiceTotals(await s.invoices.items(sc)); return found(await s.invoices.update(sc, { ...totals, amountDue: totals.total })); }

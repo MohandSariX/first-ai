@@ -4,6 +4,8 @@ import { writeFile } from "node:fs/promises";
 import { invoiceDocumentSnapshotSchema } from "@first-ai/schemas";
 import { invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 import { generateInvoicePdf, formatDocumentMoney } from "./invoice-pdf.js";
+import { captureInvoiceMentions } from "./invoice-mentions.js";
+import { fictionalInvoiceTerms, fictionalBusinessDetails } from "./test-invoice-mentions.js";
 
 function fixture(): InvoiceDocumentView {
   const identity = { name: "Société Fictive", legalName: "Société Fictive Test", addressLine1: "1 Rue Fictive", addressLine2: null, postalCode: "75001", city: "Paris", country: "FR", siret: null, vatNumber: null, email: "fictional@example.test", phone: null };
@@ -97,5 +99,28 @@ describe("invoice documents", () => {
     expect(invoiceDocumentSnapshotSchema.safeParse({ ...view.snapshot, issuance: { issuedAt: capturedAt, timeZone: "Europe/Paris", fiscalYear: 2026 } }).success).toBe(false);
     expect(await generateInvoicePdf(view)).toEqual(v3Bytes);
     if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-m2-qa.pdf", v3Bytes);
+    const v3 = structuredClone(view.snapshot);
+    if (v3.version !== 3) throw new Error("Expected v3 fixture");
+    const mentions = captureInvoiceMentions({ businessDetails: { ...fictionalBusinessDetails, executionDate: "2026-12-31", purchaseOrderIssued: true, customerOrderReference: "BC-FICTIF-123" }, terms: fictionalInvoiceTerms, classification: v3.classification, issueDate: v3.invoice.issueDate, dueDate: v3.invoice.dueDate });
+    view.snapshot = invoiceDocumentSnapshotSchema.parse({ ...v3, version: 4, ...mentions, lines: v3.lines.map(line => ({ ...line, unit: "heure", kind: "item", grossSubtotal: line.subtotal, discountAmount: "0.00" })) });
+    const v4Bytes = await generateInvoicePdf(view), v4Text = renderedText(v4Bytes);
+    for (const expected of ["FAC-2027-000001", "Émission : 01/01/2027", "31/12/2026", "BC-FICTIF-123", "heure", "Escompte pour paiement anticipé : néant", "BCE", "40,00 €", "225,50 €"]) expect(v4Text).toContain(expected);
+    expect(v4Text).not.toContain("BROUILLON");
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-m3-qa.pdf", v4Bytes);
+    for (const transactionType of ["B2C", "B2G"] as const) {
+      const classification = { ...v3.classification, transactionType };
+      const conditional = captureInvoiceMentions({ businessDetails: mentions.businessDetails, terms: fictionalInvoiceTerms, classification, issueDate: v3.invoice.issueDate, dueDate: v3.invoice.dueDate });
+      const copy = invoiceDocumentSnapshotSchema.parse({ ...view.snapshot, classification, ...conditional });
+      const text = renderedText(await generateInvoicePdf({ ...view, snapshot: copy }));
+      expect(text).not.toContain("40,00 €"); expect(text).not.toContain("Pénalités de retard"); expect(text).not.toContain("Escompte");
+    }
+    const classification = { ...v3.classification, vatTreatment: "franchise" as const };
+    const franchise = captureInvoiceMentions({ businessDetails: mentions.businessDetails, terms: fictionalInvoiceTerms, classification, issueDate: v3.invoice.issueDate, dueDate: v3.invoice.dueDate });
+    const discounted = invoiceDocumentSnapshotSchema.parse({ ...view.snapshot, classification, ...franchise,
+      lines: [{ description: "Frais fictifs explicites", unit: "forfait", kind: "charge", quantity: "1.000", unitPrice: "100.00", taxRate: "0.000", grossSubtotal: "100.00", discountAmount: "10.00", subtotal: "90.00", taxAmount: "0.00", total: "90.00" }],
+      totals: { subtotal: "90.00", taxAmount: "0.00", total: "90.00" }, taxes: [{ rate: "0.000", base: "90.00", amount: "0.00" }],
+    });
+    const franchiseText = renderedText(await generateInvoicePdf({ snapshot: discounted, payment: { ...view.payment, status: "issued", amountPaid: "0.00", amountDue: "90.00" } }));
+    for (const expected of ["293 B", "Frais supplémentaires", "Remise HT : 10,00 €", "TOTAL TTC : 90,00 €"]) expect(franchiseText).toContain(expected);
   });
 });

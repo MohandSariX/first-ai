@@ -2,6 +2,7 @@ import {
   check,
   boolean,
   numeric,
+  jsonb,
   timestamp,
   uuid,
   varchar,
@@ -9,6 +10,7 @@ import {
 import { pgTable } from "drizzle-orm/pg-core";
 import { legalEntityTypeEnum, vatRegimeEnum } from "./billing-enums.js";
 import { sql } from "drizzle-orm";
+import type { SellerInvoiceTerms } from "@first-ai/schemas";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -22,6 +24,7 @@ export const organizations = pgTable("organizations", {
   vatRegime: vatRegimeEnum("vat_regime"),
   vatOnDebits: boolean("vat_on_debits"),
   companySize: varchar("company_size", { length: 16 }),
+  invoiceTerms: jsonb("invoice_terms").$type<SellerInvoiceTerms>(),
   siret: varchar("siret", { length: 14 }),
   vatNumber: varchar("vat_number", { length: 32 }),
   email: varchar("email", { length: 320 }),

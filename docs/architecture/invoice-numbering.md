@@ -1,7 +1,8 @@
 # M2 — Référence brouillon, numéro fiscal et date d’émission
 
 Fondation technique issue de l’[audit français](../compliance/france-invoicing-audit.md),
-pas une certification fiscale. M3–M7 et la qualification des flux M0 restent ouverts.
+pas une certification fiscale. [M3](invoice-mentions.md) étend désormais les nouvelles
+émissions en v4 sans changer les garanties M2. M4–M7 et la qualification M0 restent ouverts.
 La règle de séquence au fil de l’émission et de date est vérifiée dans le
 [BOFiP, §§70–140](https://bofip.impots.gouv.fr/bofip/140-PGP.html/identifiant=BOI-TVA-DECLA-30-20-20-10-20131018).
 L’organisation représente un émetteur dans ce modèle ; import, multi-émetteurs et
@@ -28,7 +29,7 @@ justification fiscale des séries doivent être validés avant production.
 `InvoiceService.issueInvoice` revalide membership actif/rôle, verrouille facture et
 sources, gèle les profils M1 sous verrous partagés, puis appelle l’allocateur privé
 via `InvoiceRepository.allocateFiscalNumber`. La même transaction valide le scénario,
-recalcule les totaux BigInt, écrit snapshot v3 + numéro/date/statut et commit.
+recalcule les totaux BigInt, écrit snapshot v4 depuis M3 + numéro/date/statut et commit.
 
 `public.allocate_invoice_number(org, invoice)` est SQL invoker, search_path vide,
 exécution PUBLIC/anon/authenticated/service_role révoquée. La connexion serveur
@@ -63,7 +64,7 @@ bloque l’émission : réconciliation explicite, jamais antidatage ni remise à
 - Trigger INSERT : nouveau record uniquement non émis. Import historique différé.
 - Trigger UPDATE : numéro/date/instant/tenant émis immuables, même legacy sans snapshot ;
   référence interne immuable. Nouvelle émission liée à la dernière allocation de
-  cette facture et à un snapshot v3 cohérent. Protections M1 commerciales conservées.
+  cette facture et à un snapshot v4 cohérent depuis M3. Protections M1 commerciales conservées.
 - Compteur UPDATE avance de 1, jamais recule ; DELETE refusé tant que le tenant existe.
   L’ID de dernière allocation n’a volontairement pas de FK : effacer une fixture
   facture ne libère pas un numéro. Cleanup intégration supprime le tenant fictif,

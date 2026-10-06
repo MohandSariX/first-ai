@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, date, foreignKey, index, integer, jsonb, numeric, pgEnum, pgPolicy, pgTable, primaryKey, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
-import { INVOICE_STATUSES, type InvoiceDocumentSnapshot } from "@first-ai/schemas";
+import { INVOICE_STATUSES, type InvoiceDocumentSnapshot, type InvoiceBusinessDetails } from "@first-ai/schemas";
 import { organizations } from "./organizations.js";
 import { customers } from "./customers.js";
 import { quotes, jobs } from "./operations.js";
@@ -22,6 +22,7 @@ export const invoices = pgTable("invoices", {
   subtotal: amount("subtotal").notNull().default("0"), taxAmount: amount("tax_amount").notNull().default("0"), total: amount("total").notNull().default("0"),
   amountPaid: amount("amount_paid").notNull().default("0"), amountDue: amount("amount_due").notNull().default("0"), paidAt: timestamp("paid_at", { withTimezone: true }),
   documentSnapshot: jsonb("document_snapshot").$type<InvoiceDocumentSnapshot>(),
+  businessDetails: jsonb("business_details").$type<InvoiceBusinessDetails>(),
   transactionType: transactionTypeEnum("transaction_type"), operationCategory: operationCategoryEnum("operation_category"),
   fiscalTerritory: fiscalTerritoryEnum("fiscal_territory"), vatTreatment: vatTreatmentEnum("vat_treatment"), vatReason: varchar("vat_reason", { length: 500 }),
   notes: text("notes"), internalNotes: text("internal_notes"), createdByUserId: uuid("created_by_user_id").notNull(), createdByAgentId: uuid("created_by_agent_id"),
@@ -58,10 +59,12 @@ export const invoiceNumberCounters = pgTable("invoice_number_counters", {
 export const invoiceItems = pgTable("invoice_items", {
   id: uuid("id").primaryKey().defaultRandom(), organizationId: uuid("organization_id").notNull().references(() => organizations.id), invoiceId: uuid("invoice_id").notNull(), serviceId: uuid("service_id"),
   description: text("description").notNull(), quantity: numeric("quantity", { precision: 9, scale: 3 }).notNull(), unitPrice: amount("unit_price").notNull(), taxRate: numeric("tax_rate", { precision: 6, scale: 3 }).notNull(), sortOrder: integer("sort_order").notNull().default(0), ...timestamps(),
+  unit: varchar("unit", { length: 24 }), kind: varchar("kind", { length: 16 }).notNull().default("item"), discountAmount: amount("discount_amount").notNull().default("0"),
 }, t => [
   foreignKey({ name: "invoice_items_invoice_org_fk", columns: [t.invoiceId, t.organizationId], foreignColumns: [invoices.id, invoices.organizationId] }).onDelete("cascade"),
   foreignKey({ name: "invoice_items_service_org_fk", columns: [t.serviceId, t.organizationId], foreignColumns: [services.id, services.organizationId] }),
   check("invoice_items_values_check", sql`${t.quantity} > 0 and ${t.unitPrice} >= 0 and ${t.taxRate} between 0 and 100 and ${t.sortOrder} between 0 and 200`),
+  check("invoice_items_adjustments_check", sql`${t.discountAmount} >= 0 and ${t.discountAmount} <= round(${t.quantity} * ${t.unitPrice}, 2) and ${t.kind} in ('item','charge') and (${t.kind} <> 'charge' or ${t.quantity} = 1) and (${t.unit} is null or length(trim(${t.unit})) > 0)`),
   index("invoice_items_org_invoice_order_idx").on(t.organizationId, t.invoiceId, t.sortOrder),
   pgPolicy("invoice_items_select_invoice", { for: "select", to: "authenticated", using: sql`organization_id = (select public.current_organization_id()) and exists (select 1 from public.invoices where id = invoice_items.invoice_id and organization_id = invoice_items.organization_id)` }),
 ]).enableRLS();

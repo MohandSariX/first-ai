@@ -9,13 +9,14 @@ import { createInvoiceToolRegistry } from "./invoice-tools.js";
 import { PaymentService } from "./payment-service.js";
 import { BillingIdentityService } from "./billing-service.js";
 import { sellerBillingSchema, customerBillingSchema, invoiceIssueCalendar } from "@first-ai/schemas";
+import { fictionalInvoiceTerms, fictionalBusinessDetails } from "./test-invoice-mentions.js";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
   const clientOptions = { auth: { autoRefreshToken: false, persistSession: false } };
   let db: ReturnType<typeof createDatabaseClient>, service: InvoiceService, store: InvoiceStore, admin: SupabaseClient, paymentService: PaymentService;
   const clients: SupabaseClient[] = [], contexts: CurrentBusinessUser[] = [], created: string[] = [], sourceQuotes: string[] = [], sourceJobs: string[] = [], sourceServices: string[] = [];
-  const draft = (customerId: string) => ({ customerId, dueDate: "2026-11-05", transactionType: "B2B" as const, operationCategory: "services" as const, fiscalTerritory: "domestic" as const, vatTreatment: "normal" as const, vatReason: null });
+  const draft = (customerId: string) => ({ customerId, businessDetails: fictionalBusinessDetails, dueDate: "2026-11-05", transactionType: "B2B" as const, operationCategory: "services" as const, fiscalTerritory: "domestic" as const, vatTreatment: "normal" as const, vatReason: null });
   beforeAll(async () => {
     for (const name of ["DATABASE_URL", "SUPABASE_URL"]) if (!["localhost", "127.0.0.1"].includes(new URL(process.env[name] ?? "missing").hostname)) throw new Error("Invoice integration refuses non-local configuration.");
     admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, clientOptions);
@@ -24,7 +25,7 @@ describe("local invoice foundation", () => {
     for (let n = 0; n < 2; n++) {
       const email = `invoice-${orgs[n]}@example.test`, password = `Fictional-${randomUUID()}`;
       const result = await admin.auth.admin.createUser({ email, password, email_confirm: true }); if (result.error) throw result.error; authIds.push(result.data.user.id);
-      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}`, legalName: `Fictional seller ${n}`, addressLine1: "1 Rue Fictive", postalCode: "75001", city: "Paris", legalEntityType: "company", legalForm: "SAS", registration: "RCS Paris (fictif)", shareCapital: "1000", siren: "123456789", vatNumber: "FR00123456789", vatRegime: "normal", vatOnDebits: false });
+      await db.insert(organizations).values({ id: orgs[n]!, name: `Fictional invoice tenant ${n}`, legalName: `Fictional seller ${n}`, addressLine1: "1 Rue Fictive", postalCode: "75001", city: "Paris", legalEntityType: "company", legalForm: "SAS", registration: "RCS Paris (fictif)", shareCapital: "1000", siren: "123456789", vatNumber: "FR00123456789", vatRegime: "normal", vatOnDebits: false, invoiceTerms: fictionalInvoiceTerms });
       await db.insert(users).values({ id: userIds[n]!, organizationId: orgs[n]!, authUserId: authIds[n]!, firstName: "Fictional", lastName: "Invoice owner", email, role: "OWNER" });
       await db.insert(customers).values({ id: customerIds[n]!, organizationId: orgs[n]!, type: "company", name: `Fictional invoice customer ${n}`, billingName: `Fictional invoice customer ${n}`, billingLegalName: `Fictional legal customer ${n}`, billingClassification: "professional", billingAddressLine1: "2 Rue de Facturation Fictive", billingPostalCode: "75002", billingCity: "Paris", billingCountry: "FR", establishmentCountry: "FR", taxablePerson: true, siren: "987654321" });
       const site = randomUUID(), catalog = randomUUID(), quote = randomUUID(), job = randomUUID();
@@ -62,7 +63,7 @@ describe("local invoice foundation", () => {
     expect(b.invoiceNumber).toBe(`FAC-${year}-000001`); expect(a.invoiceNumber).toBe(`FAC-${year}-000002`);
     expect(a.issuedAt!.getTime()).toBeGreaterThanOrEqual(b.issuedAt!.getTime());
     expect(a.issueDate).toBe(invoiceIssueCalendar(a.issuedAt!, "Europe/Paris").issueDate);
-    expect(a.documentSnapshot).toMatchObject({ version: 3, invoice: { number: a.invoiceNumber, issueDate: a.issueDate }, issuance: { issuedAt: a.issuedAt!.toISOString(), timeZone: "Europe/Paris", fiscalYear: year } });
+    expect(a.documentSnapshot).toMatchObject({ version: 4, invoice: { number: a.invoiceNumber, issueDate: a.issueDate }, issuance: { issuedAt: a.issuedAt!.toISOString(), timeZone: "Europe/Paris", fiscalYear: year } });
     const retry = await service.issueInvoice(c, a.id);
     expect(retry.invoiceNumber).toBe(a.invoiceNumber); expect(retry.issueDate).toBe(a.issueDate); expect(retry.issuedAt).toEqual(a.issuedAt); expect(retry.documentSnapshot).toEqual(a.documentSnapshot);
     expect((await service.getInvoice(contexts[1]!, created[1]!)).invoiceNumber).toBeNull();
@@ -179,8 +180,8 @@ describe("local invoice foundation", () => {
   }
   it("atomically captures available billing identities and freezes issued document data", async () => {
     const invoice = await issued(), c = contexts[0]!, before = await service.getInvoiceDocument(c, invoice.id);
-    expect(before.snapshot).toMatchObject({ version: 3, organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: "2 Rue de Facturation Fictive" }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
-    if (before.snapshot.version !== 3) throw new Error("Expected new document v3");
+    expect(before.snapshot).toMatchObject({ version: 4, organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: "2 Rue de Facturation Fictive" }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
+    if (before.snapshot.version !== 4) throw new Error("Expected new document v4");
     try {
       await db.update(customers).set({ name: "Changed customer", legalName: "Changed legal identity" }).where(eq(customers.id, customerIds[0]!));
       await db.update(organizations).set({ legalName: "Changed seller", addressLine1: "Changed address" }).where(eq(organizations.id, orgs[0]!));
@@ -385,7 +386,7 @@ describe("local invoice foundation", () => {
         const invoice = await service.createDraftInvoice(c, { ...draft(customer.id), transactionType: transaction, operationCategory: category });
         await service.addInvoiceItem(c, invoice.id, { description: "Scenario fictif", quantity: "1", unitPrice: "10", taxRate: "20" });
         const issued = await service.issueInvoice(c, invoice.id);
-        expect(issued.documentSnapshot).toMatchObject({ version: 3, classification: { transactionType: transaction, operationCategory: category }, customer: { addressLine1: original.billingAddressLine1 } });
+        expect(issued.documentSnapshot).toMatchObject({ version: 4, classification: { transactionType: transaction, operationCategory: category }, customer: { addressLine1: original.billingAddressLine1 } });
         await expect(service.updateClassification(c, issued.id, classification)).rejects.toMatchObject({ code: "CONFLICT" });
         await expect(db.update(invoices).set({ operationCategory: "services" === category ? "goods" : "services" }).where(eq(invoices.id, issued.id))).rejects.toMatchObject({ cause: { code: "23514" } });
         const before = structuredClone(issued.documentSnapshot);
@@ -401,9 +402,42 @@ describe("local invoice foundation", () => {
       await billing.updateSeller(c, { ...original, legalEntityType: "individual_entrepreneur", legalForm: null, shareCapital: null, vatRegime: "franchise", vatNumber: null });
       const invoice = await service.createDraftInvoice(c, { ...draft(customerIds[0]!), vatTreatment: "franchise" });
       await service.addInvoiceItem(c, invoice.id, { description: "Franchise fictive", quantity: "1", unitPrice: "10", taxRate: "0" });
-      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toMatchObject({ version: 3, seller: { fiscalIdentity: { vatRegime: "franchise", shareCapital: null } }, classification: { vatTreatment: "franchise" }, totals: { total: "10.00" } });
+      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toMatchObject({ version: 4, seller: { fiscalIdentity: { vatRegime: "franchise", shareCapital: null } }, classification: { vatTreatment: "franchise" }, totals: { total: "10.00" } });
       await billing.updateSeller(c, original);
       expect((await service.getInvoiceDocument(c, invoice.id)).snapshot.seller.vatNumber).toBeNull();
     } finally { await billing.updateSeller(c, original); }
+  });
+  it("M3 rolls back missing mentions, captures discounts/charges and freezes business data and terms", async () => {
+    const c = contexts[0]!, billing = new BillingIdentityService(store);
+    const invoice = await service.createDraftInvoice(c, { ...draft(customerIds[0]!), businessDetails: undefined });
+    await service.addInvoiceItem(c, invoice.id, { description: "Prestation M3 fictive", unit: "heure", quantity: "2", unitPrice: "100", taxRate: "20", discountAmount: "10" });
+    await service.addInvoiceItem(c, invoice.id, { description: "Frais explicites fictifs", kind: "charge", unit: "forfait", quantity: "1", unitPrice: "10", taxRate: "5.5" });
+    await expect(service.addInvoiceItem(c, invoice.id, { description: "Remise excessive fictive", quantity: "1", unitPrice: "10", taxRate: "20", discountAmount: "11" })).rejects.toMatchObject({ cause: { code: "23514" } });
+    expect((await service.getInvoice(c, invoice.id)).items).toHaveLength(2);
+    const counter = await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId));
+    await expect(service.issueInvoice(c, invoice.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).toEqual(counter);
+    await expect(service.updateBusinessDetails(c, created[1]!, fictionalBusinessDetails)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    try {
+      await db.update(users).set({ status: "inactive" }).where(eq(users.id, c.userId));
+      await expect(service.updateBusinessDetails(c, invoice.id, fictionalBusinessDetails)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(billing.updateInvoiceTerms(c, fictionalInvoiceTerms)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await db.update(users).set({ status: "active", role: "READ_ONLY" }).where(eq(users.id, c.userId));
+      await expect(service.updateBusinessDetails(c, invoice.id, fictionalBusinessDetails)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(billing.updateInvoiceTerms(c, fictionalInvoiceTerms)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally { await db.update(users).set({ status: "active", role: "OWNER" }).where(eq(users.id, c.userId)); }
+    await service.updateBusinessDetails(c, invoice.id, { ...fictionalBusinessDetails, purchaseOrderIssued: true, customerOrderReference: "BC-M3-FICTIF" });
+    try {
+      await billing.updateInvoiceTerms(c, { ...fictionalInvoiceTerms, b2bPenaltyRule: null });
+      await expect(service.issueInvoice(c, invoice.id)).rejects.toMatchObject({ code: "CONFLICT" });
+      await billing.updateInvoiceTerms(c, fictionalInvoiceTerms);
+      const issued = await service.issueInvoice(c, invoice.id);
+      expect(issued.documentSnapshot).toMatchObject({ version: 4, businessDetails: { executionDate: "2026-10-01", customerOrderReference: "BC-M3-FICTIF" }, paymentTerms: { recoveryIndemnityAmount: "40.00" }, totals: { subtotal: "200.00", taxAmount: "38.55", total: "238.55" } });
+      const frozen = structuredClone(issued.documentSnapshot);
+      await billing.updateInvoiceTerms(c, { ...fictionalInvoiceTerms, paymentTermsText: "Nouvelles conditions fictives" });
+      expect((await service.getInvoiceDocument(c, invoice.id)).snapshot).toEqual(frozen);
+      await expect(service.updateBusinessDetails(c, invoice.id, fictionalBusinessDetails)).rejects.toMatchObject({ code: "CONFLICT" });
+      await expect(db.update(invoices).set({ businessDetails: fictionalBusinessDetails }).where(eq(invoices.id, invoice.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    } finally { await billing.updateInvoiceTerms(c, fictionalInvoiceTerms); }
   });
 });

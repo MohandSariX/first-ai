@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { confirmInvoiceBusiness } from "./invoice-business";
 import { e2eFixture } from "./fixture";
 
 test("owner issues an invoice and records partial/full fictional receipts on mobile", async ({ page }) => {
@@ -16,6 +17,7 @@ test("owner issues an invoice and records partial/full fictional receipts on mob
   const classification = page.getByRole("form", { name: "Enregistrer la classification" });
   await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal"); await classification.getByRole("button", { name: "Enregistrer la classification" }).click();
   await page.getByText("Modifier la ligne", { exact: true }).click(); const edit = page.getByRole("form", { name: "Enregistrer la ligne" }); await edit.getByLabel("Quantité").fill("3"); await edit.getByRole("button", { name: "Enregistrer la ligne" }).click(); await expect(totals).toContainText("360,36 €");
+  await confirmInvoiceBusiness(page);
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click(); await expect(page.getByText("Émise", { exact: true })).toBeVisible(); await expect(page.getByRole("button", { name: "Ajouter la ligne" })).toHaveCount(0);
   const receipt = page.getByRole("form", { name: "Enregistrer un paiement" });
   await receipt.getByLabel("Montant reçu (€)").fill("100"); await receipt.getByLabel("Mode d’encaissement").selectOption("bank_transfer"); await receipt.getByLabel("Date de réception").fill("2026-01-01T12:00"); await receipt.getByLabel("Référence (facultative)").fill("Encaissement fictif E2E partiel"); await receipt.getByRole("button", { name: "Enregistrer l’encaissement" }).click();

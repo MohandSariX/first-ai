@@ -249,3 +249,16 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   ni audit ni archivage M5 ; seules transactions complètes du service appellent l’allocateur.
 - **Sources :** `docs/architecture/invoice-numbering.md`, InvoiceService/InvoiceRepository,
   migrations 0014/0015, audit §5/M2 et BOFiP §§70–140.
+
+## ADR-23 — Dates confirmées et mentions conditionnelles figées
+
+- **Statut :** adopté, implémenté M3 ; conformité globale non établie.
+- **Décision :** données métier explicitement saisies, termes vendeur structurés,
+  remise acquise HT par ligne/frais positifs distincts, snapshot v4 atomique à l’émission.
+  Applicabilité B2B/B2C/B2G déterministe ; aucune clause ou date issue d’un LLM.
+- **Raison :** un taux zéro, un site ou un timestamp ne qualifie pas une opération ;
+  termes futurs et données CRM modifiées ne doivent pas réécrire le document émis.
+- **Conséquences :** configuration incomplète bloque l’émission sans numéro consommé.
+  Périmètre domestique ordinaire seulement ; acomptes, exceptions sectorielles et
+  clauses publiques exhaustives restent à cadrer. V1/v2/v3 inchangés, M4–M7 distincts.
+- **Sources :** `docs/architecture/invoice-mentions.md`, migration 0016, audit M3.

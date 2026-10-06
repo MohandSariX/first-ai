@@ -93,6 +93,15 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
       const treatments = { normal: "TVA normale", franchise: "Franchise en base", exemption: "Exonération", reverse_charge: "Autoliquidation", other: "Autre cas fiscal" };
       paragraph(`Classification : ${snapshot.classification.transactionType} - ${categories[snapshot.classification.operationCategory]} - ${treatments[snapshot.classification.vatTreatment]}`);
     }
+    if (snapshot.version === 4) {
+      const d = snapshot.businessDetails;
+      paragraph(d.executionDate ? `Exécution / livraison : ${date(d.executionDate)}` : `Période de service : ${date(d.periodStart!)} au ${date(d.periodEnd!)}`);
+      if (d.executionLocation) paragraph(`Lieu d’exécution : ${d.executionLocation}`);
+      if (d.customerOrderReference) paragraph(`Commande / référence acheteur : ${d.customerOrderReference}`);
+      if (snapshot.classification.operationCategory !== "services" && d.deliveryAddressDifferent) paragraph(`Livraison des biens : ${[d.deliveryAddressLine1, d.deliveryAddressLine2, d.deliveryPostalCode, d.deliveryCity, d.deliveryCountry].filter(Boolean).join(", ")}`);
+      if (snapshot.seller.fiscalIdentity.vatOnDebits) paragraph("Option pour le paiement de la taxe d’après les débits.");
+      if (snapshot.vatMention) paragraph(snapshot.vatMention);
+    }
     if (!snapshot.customer.addressLine1) paragraph("Adresse de facturation client non renseignée. L’adresse d’intervention n’est pas utilisée.");
     paragraph("DOCUMENT TECHNIQUE - Conformité fiscale non validée. Vérifier les mentions obligatoires avant tout usage en production.");
     heading("Prestations");
@@ -101,7 +110,8 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
     const tableHeader = () => { ensure(25); ["Description", "Qté", "PU HT", "TVA", "Total HT"].forEach((v, n) => text(v, columns[n]!, y, 9, widths[n]!, true)); y += 24; };
     tableHeader();
     for (const line of snapshot.lines) {
-      const parts = wrap(line.description, widths[0]!, 9);
+      const description = "unit" in line ? `${line.kind === "charge" ? "Frais supplémentaires : " : ""}${line.description}\nUnité : ${line.unit}${line.discountAmount !== "0.00" ? `\nBrut HT : ${formatDocumentMoney(line.grossSubtotal)}\nRemise HT : ${formatDocumentMoney(line.discountAmount)}` : ""}` : line.description;
+      const parts = wrap(description, widths[0]!, 9);
       for (let n = 0; n < parts.length; n++) {
         if (y + 15 > 780) { newPage(); tableHeader(); }
         text(parts[n]!, 42, y, 9, widths[0]!);
@@ -115,6 +125,15 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
     for (const tax of snapshot.taxes) paragraph(`TVA ${displayDecimal(tax.rate)} % - Base HT : ${formatDocumentMoney(tax.base)} - TVA : ${formatDocumentMoney(tax.amount)}`);
     paragraph(`TVA totale : ${formatDocumentMoney(snapshot.totals.taxAmount)}`);
     paragraph(`TOTAL TTC : ${formatDocumentMoney(snapshot.totals.total)}`, true);
+    if (snapshot.version === 4) {
+      const t = snapshot.paymentTerms;
+      heading("Conditions de règlement"); paragraph(t.paymentTermsText);
+      if (t.dueRule !== "explicit") paragraph(`Échéance : ${t.dueDays} jours depuis ${t.dueRule === "invoice_days" ? "l’émission" : "l’exécution / fin de période"}.`);
+      if (t.earlyDiscountText) paragraph(t.earlyDiscountText);
+      if (t.latePenaltyText) paragraph(t.latePenaltyText);
+      if (t.recoveryIndemnityAmount) paragraph(`Indemnité forfaitaire pour frais de recouvrement en cas de retard : ${formatDocumentMoney(t.recoveryIndemnityAmount)} (client professionnel).`);
+      if (t.publicPaymentTerms) paragraph(t.publicPaymentTerms);
+    }
     if (snapshot.invoice.notes) { heading("Notes au client"); paragraph(snapshot.invoice.notes); }
     ensure(160); heading("Situation des encaissements - actualisée");
     paragraph(`État : ${paymentLabels[view.payment.status]}`);

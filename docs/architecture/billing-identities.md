@@ -2,7 +2,8 @@
 
 Fondation technique issue de l’[audit français](../compliance/france-invoicing-audit.md).
 **Pas de certification fiscale ni d’autorisation d’usage fiscal production.**
-[M2 numéro/date](invoice-numbering.md) étend désormais ce snapshot en v3 ; M3–M7
+[M2 numéro/date](invoice-numbering.md) étend ce snapshot en v3 ; [M3 mentions](invoice-mentions.md)
+le porte désormais en v4 pour les nouvelles émissions ; M4–M7
 restent distincts. Aucune intégration électronique ou mutation IA ajoutée.
 
 ## Modèle et migration
@@ -57,7 +58,7 @@ révélation de leur existence. Aucun outil ni action d’approbation IA de fact
 
 Sous la transaction existante : membership/rôle actifs, facture verrouillée,
 sources revalidées, identités sous verrous partagés, totaux BigInt recalculés,
-validation du scénario, snapshot v3 depuis M2 + issued_at/statut/totaux atomiques.
+validation du scénario, snapshot v4 depuis M3 + issued_at/statut/totaux atomiques.
 Toute erreur rollback ; retry d’une émission conserve le document original.
 
 - Vendeur : identité légale, type juridique, adresse complète, pays, régime TVA,
@@ -90,19 +91,20 @@ Le conseil fiscal et M0 restent nécessaires ; les tests ne certifient pas la co
 ## Snapshot et PDF
 
 Union Zod discriminée : version 1 historique inchangée, version 2 livrée M1,
-version 3 pour les nouvelles émissions depuis M2. V2 conserve les champs de rendu précédents et ajoute
+version 4 pour les nouvelles émissions depuis M3 (v3 M2 conservé). V2 conserve les champs de rendu précédents et ajoute
 seller.fiscalIdentity, customer.billingIdentity et classification. Données prises
 dans la même transaction ; ni notes internes, secrets ni chaîne de pensée.
 
 Le trigger remplacé dans la **nouvelle** migration conserve la protection
-commerciale, exigeait v2 en M1 (v3 depuis M2) et sa cohérence avec les colonnes
+commerciale, exigeait v2 en M1 (v3 M2, v4 depuis M3) et sa cohérence avec les colonnes
 classifiées. Classification et snapshot sont gelés après émission, y compris
 interdiction de qualifier silencieusement les anciennes factures. Aucune réécriture
 des anciennes migrations ou snapshots ; legacy NULL reste indisponible en PDF.
 
 PDF à la demande : adresse facturation dédiée, identité légale, EI/forme/capital/
-immatriculation/SIREN présents et classification lisible. Pas des mentions fiscales
-complètes de M3 : ni texte 293 B, ni pénalités/escompte, ni nouvelles dates.
+immatriculation/SIREN présents et classification lisible. M1 n’ajoutait pas les
+mentions/dates M3 ; celles-ci sont désormais rendues conditionnellement en v4,
+sans changer les documents historiques.
 Avertissement fiscal maintenu. V1 garde son avertissement d’adresse absente.
 Paiements déclaratifs actuels restent séparés du corps immuable ; WinAnsi inchangé.
 
@@ -117,6 +119,6 @@ rollback, profils modifiés après issue, classification SQL immuable et franchi
 E2E mobile : configuration vendeur/client, séparation site, rejet sans qualification,
 émission puis PDF ; anciennes attentes de navigation synchronisées sur route détail.
 
-M2 numérotation/date est livré séparément ; M3 dates métier/mentions, M4 avoirs,
+M2 numérotation/date et M3 dates métier/mentions sont livrés séparément ; M4 avoirs,
 M5 rétention/audit, M6 Unicode et M7 plateforme restent non implémentés. Réception électronique déjà
 applicable à qualifier sans attendre ces jalons. Aucun email, paiement bancaire ou IA write.

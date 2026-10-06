@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema } from "./billing.js";
+import { invoiceBusinessDetailsSchema, invoicePaymentTermsSnapshotSchema } from "./invoice-mentions.js";
 
 const nullableText = (max: number) => z.string().max(max).nullable();
 const money = z.string().regex(/^\d{1,12}\.\d{2}$/);
@@ -50,5 +51,23 @@ export const invoiceDocumentSnapshotV3Schema = invoiceDocumentSnapshotV2Schema.e
     if (snapshot.capturedAt !== snapshot.issuance.issuedAt || date.issueDate !== snapshot.invoice.issueDate || date.fiscalYear !== snapshot.issuance.fiscalYear || !snapshot.invoice.number.startsWith(`FAC-${date.fiscalYear}-`) || snapshot.invoice.dueDate < date.issueDate) context.addIssue({ code: "custom", message: "Métadonnées d’émission incohérentes." });
   } catch { context.addIssue({ code: "custom", message: "Fuseau d’émission invalide." }); }
 });
-export const invoiceDocumentSnapshotSchema = z.discriminatedUnion("version", [invoiceDocumentSnapshotV1Schema, invoiceDocumentSnapshotV2Schema, invoiceDocumentSnapshotV3Schema]);
+export const invoiceDocumentSnapshotV4Schema = invoiceDocumentSnapshotV2Schema.extend({
+  version: z.literal(4), issuance: invoiceDocumentSnapshotV3Schema.shape.issuance,
+  businessDetails: invoiceBusinessDetailsSchema, paymentTerms: invoicePaymentTermsSnapshotSchema,
+  vatMention: nullableText(1000),
+  lines: z.array(invoiceDocumentSnapshotV1Schema.shape.lines.element.extend({
+    unit: z.string().trim().min(1).max(24), kind: z.enum(["item", "charge"]),
+    grossSubtotal: money, discountAmount: money,
+  })).min(1).max(200),
+}).superRefine((s, ctx) => {
+  // Reuse v3's trusted time validation without changing the historical DTO.
+  const { businessDetails, paymentTerms, vatMention: _vatMention, ...previous } = s;
+  void _vatMention;
+  const result = invoiceDocumentSnapshotV3Schema.safeParse({ ...previous, version: 3,
+    lines: previous.lines.map(({ unit: _u, kind: _k, grossSubtotal: _g, discountAmount: _d, ...line }) => { void _u; void _k; void _g; void _d; return line; }),
+  });
+  if (!result.success || paymentTerms.dueDate !== s.invoice.dueDate || !(businessDetails.executionDate ?? businessDetails.periodEnd)) ctx.addIssue({ code: "custom", message: "Document M3 incohérent." });
+  if (s.classification.transactionType !== "B2B" && (paymentTerms.latePenaltyText !== null || paymentTerms.recoveryIndemnityAmount !== null || paymentTerms.earlyDiscountText !== null)) ctx.addIssue({ code: "custom", message: "Mentions privées B2B interdites sur ce scénario." });
+});
+export const invoiceDocumentSnapshotSchema = z.discriminatedUnion("version", [invoiceDocumentSnapshotV1Schema, invoiceDocumentSnapshotV2Schema, invoiceDocumentSnapshotV3Schema, invoiceDocumentSnapshotV4Schema]);
 export type InvoiceDocumentSnapshot = z.infer<typeof invoiceDocumentSnapshotSchema>;

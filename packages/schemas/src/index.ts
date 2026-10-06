@@ -7,3 +7,4 @@ export * from "./invoices.js";
 export * from "./payments.js";
 export * from "./invoice-document.js";
 export * from "./billing.js";
+export * from "./invoice-mentions.js";

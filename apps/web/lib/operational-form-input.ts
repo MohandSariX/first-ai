@@ -2,7 +2,8 @@ import { acceptQuoteSchema, addQuoteItemSchema, assignTechnicianSchema, createDr
 import { z } from "zod";
 import { createDraftInvoiceSchema, addInvoiceItemSchema, updateInvoiceItemSchema, recordPaymentSchema, cancelPaymentSchema } from "@first-ai/schemas";
 import { sellerBillingSchema, customerBillingSchema, invoiceClassificationSchema } from "@first-ai/schemas";
-export const operationSchema = z.enum(["billing.seller", "billing.customer", "invoice.classify", "payment.record", "payment.cancel", "invoice.create", "invoice.addItem", "invoice.updateItem", "invoice.removeItem", "invoice.issue", "invoice.cancel", "quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
+import { invoiceBusinessDetailsSchema, sellerInvoiceTermsSchema } from "@first-ai/schemas";
+export const operationSchema = z.enum(["billing.terms", "invoice.business", "billing.seller", "billing.customer", "invoice.classify", "payment.record", "payment.cancel", "invoice.create", "invoice.addItem", "invoice.updateItem", "invoice.removeItem", "invoice.issue", "invoice.cancel", "quote.create", "quote.update", "quote.addItem", "quote.updateItem", "quote.removeItem", "quote.ready", "quote.accept", "quote.reject", "job.create", "job.schedule", "job.reschedule", "job.assign", "job.start", "job.complete", "job.cancel", "report.create", "report.update", "report.complete"]);
 export type Operation = z.infer<typeof operationSchema>;
 export function formText(form: FormData, key: string): string { const v = form.get(key); return typeof v === "string" ? v.trim() : ""; }
 const optional = (f: FormData, k: string) => formText(f, k) || undefined;
@@ -10,6 +11,14 @@ const itemInput = (f: FormData) => ({ serviceId: optional(f, "serviceId") ?? nul
 // The same schemas validate the browser form and the server action, before service validation.
 export function parseOperationalForm(operation: Operation, f: FormData) {
   switch (operation) {
+    case "billing.terms": case "invoice.business": {
+      const schema = operation === "billing.terms" ? sellerInvoiceTermsSchema : invoiceBusinessDetailsSchema;
+      return schema.parse(Object.fromEntries(Object.keys(schema.shape).map(key => {
+        const value = formText(f, key);
+        const booleans = ["purchaseOrderIssued", "deliveryAddressDifferent", "b2bRecoveryIndemnity"];
+        return [key, booleans.includes(key) ? value === "yes" ? true : value === "no" ? false : null : ["dueDays", "legalRateMultiplier"].includes(key) ? value ? Number(value) : null : value || null];
+      })));
+    }
     case "billing.seller": case "billing.customer": {
       const schema = operation === "billing.seller" ? sellerBillingSchema : customerBillingSchema;
       return schema.parse(Object.fromEntries(Object.keys(schema.shape).map(key => {
@@ -25,7 +34,7 @@ export function parseOperationalForm(operation: Operation, f: FormData) {
       return createDraftInvoiceSchema.parse({ customerId: formText(f, "customerId"), dueDate: formText(f, "dueDate"), quoteId: optional(f, "sourceQuoteId"), jobId: optional(f, "sourceJobId"), notes: optional(f, "notes"), internalNotes: optional(f, "internalNotes") });
     }
     case "invoice.addItem": case "invoice.updateItem": {
-      const item = { serviceId: optional(f, "serviceId") ?? null, description: formText(f, "description"), quantity: formText(f, "quantity"), unitPrice: formText(f, "unitPrice"), taxRate: formText(f, "taxRate"), sortOrder: Number(formText(f, "sortOrder") || "0") };
+      const item = { serviceId: optional(f, "serviceId") ?? null, description: formText(f, "description"), quantity: formText(f, "quantity"), unitPrice: formText(f, "unitPrice"), taxRate: formText(f, "taxRate"), sortOrder: Number(formText(f, "sortOrder") || "0"), unit: formText(f, "unit") || "unité", kind: formText(f, "kind") || "item", discountAmount: formText(f, "discountAmount") || "0" };
       return (operation === "invoice.addItem" ? addInvoiceItemSchema : updateInvoiceItemSchema).parse(item);
     }
     case "quote.create": return createDraftQuoteSchema.parse({ customerId: formText(f, "customerId"), siteId: formText(f, "siteId"), validUntil: optional(f, "validUntil"), notes: optional(f, "notes") });

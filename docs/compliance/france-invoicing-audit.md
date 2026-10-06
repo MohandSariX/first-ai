@@ -372,8 +372,8 @@ Chorus Pro/B2G reste un flux spécifique à cadrer si clients publics concernés
 profils structurés/UI, classification explicite et snapshot v2 des nouvelles
 émissions. Voir [périmètre, contrôles et limitations M1](../architecture/billing-identities.md).
 La matrice ci-dessus reste le constat historique du 05/10/2026, pas une matrice
-réécrite pour prétendre à la conformité ; M2 est livré techniquement ci-dessous,
-M3–M7 et la qualification M0 restent ouverts.
+réécrite pour prétendre à la conformité ; M2/M3 sont livrés techniquement ci-dessous,
+M4–M7, les exceptions M3 et la qualification M0 restent ouverts.
 
 - Petit modèle/UI vendeur et adresses client distinctes ; données fiscales
   qualifiées et champs conditionnels, aucune adresse de site implicite.
@@ -397,6 +397,12 @@ Les constats de l’audit restent historiques ; aucune conformité globale certi
   rollback, retry, changement d’année/fuseau, date passée/future et capacité.
 
 ### M3 — Snapshot et PDF des mentions applicables
+
+**Statut d’implémentation : livré techniquement dans le périmètre domestique ordinaire**,
+migration additive 0016 et snapshot v4. Dates/commande, unités/remises/frais,
+TVA et termes conditionnels configurés ; acomptes et exceptions non couverts.
+Voir [implémentation et limites M3](../architecture/invoice-mentions.md).
+La matrice décrit l’audit initial ; M0 et M4–M7 restent ouverts, conformité non établie.
 
 - Dates d’exécution/acompte, commande, unité, réductions/frais exacts, qualification
   TVA et textes validés, règlement/escompte/pénalités adaptés au client.

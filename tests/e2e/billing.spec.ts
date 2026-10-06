@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { confirmInvoiceBusiness } from "./invoice-business";
 import { e2eFixture } from "./fixture";
 
 test("M1 billing configuration and explicit invoice classification are usable on mobile", async ({ page }) => {
@@ -33,6 +34,7 @@ test("M1 billing configuration and explicit invoice classification are usable on
   const classification = page.getByRole("form", { name: "Enregistrer la classification" });
   await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal");
   await classification.getByRole("button").click(); await expect(classification.getByRole("status")).toHaveText("Modification enregistrée.");
+  await confirmInvoiceBusiness(page);
   await issue.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await issue.getByRole("button").click();
   await expect(page.getByRole("link", { name: "Télécharger le PDF" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

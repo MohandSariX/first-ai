@@ -3,8 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { e2eFixture } from "./fixture";
+import { confirmInvoiceBusiness } from "./invoice-business";
 
-test("M2 draft reference becomes an issued fiscal number matching the secure immutable PDF", async ({ page, request }) => {
+test("M3 confirmed service date and order reference produce an immutable PDF with M2 fiscal number", async ({ page, request }) => {
   for (const name of ["SUPABASE_URL", "DATABASE_URL"]) if (!["localhost", "127.0.0.1"].includes(new URL(process.env[name] ?? "missing").hostname)) throw new Error("PDF E2E refuses non-local configuration.");
   const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const ownerResult = await admin.from("users").select("id, organization_id").eq("email", e2eFixture.email).single();
@@ -28,6 +29,7 @@ test("M2 draft reference becomes an issued fiscal number matching the secure imm
   await expect(page.getByRole("region", { name: "Totaux" })).toContainText("120,00 €");
   const classification = page.getByRole("form", { name: "Enregistrer la classification" });
   await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal"); await classification.getByRole("button", { name: "Enregistrer la classification" }).click();
+  await confirmInvoiceBusiness(page, "BC-E2E-FICTIF");
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click();
   const link = page.getByRole("link", { name: "Télécharger le PDF" }); await expect(link).toBeVisible();
   await expect(page.getByText("Numéro de facture", { exact: true })).toBeVisible();
