@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { e2eFixture } from "./fixture";
 
-test("issued invoice PDF download is immutable, authenticated and tenant/role scoped", async ({ page, request }) => {
+test("M2 draft reference becomes an issued fiscal number matching the secure immutable PDF", async ({ page, request }) => {
   for (const name of ["SUPABASE_URL", "DATABASE_URL"]) if (!["localhost", "127.0.0.1"].includes(new URL(process.env[name] ?? "missing").hostname)) throw new Error("PDF E2E refuses non-local configuration.");
   const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const ownerResult = await admin.from("users").select("id, organization_id").eq("email", e2eFixture.email).single();
@@ -14,9 +14,12 @@ test("issued invoice PDF download is immutable, authenticated and tenant/role sc
   await expect(page.getByRole("heading", { name: "Tableau de bord" })).toBeVisible();
   await page.goto("/invoices"); await page.getByText("Nouvelle facture", { exact: true }).click();
   await page.getByLabel("Client", { exact: true }).selectOption({ label: e2eFixture.operationalCustomerName });
-  await page.getByLabel("Date d’émission prévue").fill("2026-10-05"); await page.getByLabel("Échéance").fill("2026-11-05"); await page.getByRole("button", { name: "Créer le brouillon" }).click();
+  await page.getByLabel("Échéance").fill("2026-11-05"); await page.getByRole("button", { name: "Créer le brouillon" }).click();
   await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: /FAC-2026-\d{6}/, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^BROUILLON-/, level: 1 })).toBeVisible();
+  await expect(page.getByText("Référence brouillon", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^FAC-/, level: 1 })).toHaveCount(0);
+  await expect(page.getByLabel("Date d’émission prévue")).toHaveCount(0);
   const id = page.url().split("/").at(-1)!, url = `/api/invoices/${id}/pdf`;
   await expect(page.getByRole("link", { name: "Télécharger le PDF" })).toHaveCount(0);
   expect((await page.request.get(url)).status()).toBe(409);
@@ -27,10 +30,15 @@ test("issued invoice PDF download is immutable, authenticated and tenant/role sc
   await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal"); await classification.getByRole("button", { name: "Enregistrer la classification" }).click();
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click();
   const link = page.getByRole("link", { name: "Télécharger le PDF" }); await expect(link).toBeVisible();
+  await expect(page.getByText("Numéro de facture", { exact: true })).toBeVisible();
+  const finalNumber = await page.getByRole("heading", { level: 1 }).innerText();
+  expect(finalNumber).toMatch(/^FAC-\d{4}-\d{6}$/);
   const downloadPromise = page.waitForEvent("download"); await link.click(); const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^FAC-2026-\d{6}\.pdf$/);
+  expect(download.suggestedFilename()).toBe(`${finalNumber}.pdf`);
   const path = await download.path(); if (!path) throw new Error("Download missing.");
-  expect((await readFile(path)).subarray(0, 5).toString()).toBe("%PDF-");
+  const bytes = await readFile(path);
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(bytes.toString("latin1")).toContain(`FACTURE ${finalNumber}`);
   const original = await page.request.get(url); expect(original.status()).toBe(200); expect(original.headers()["content-type"]).toBe("application/pdf"); expect(original.headers()["cache-control"]).toContain("no-store");
   expect((await request.get(url)).status()).toBe(401);
 
@@ -43,7 +51,7 @@ test("issued invoice PDF download is immutable, authenticated and tenant/role sc
     await checked(admin.from("organizations").insert({ id: foreignOrg, name: "Organisation PDF Fictive B" }));
     await checked(admin.from("users").insert({ id: foreignUser, organization_id: foreignOrg, auth_user_id: authId, first_name: "Fictif", last_name: "PDF B", email: `pdf-${foreignOrg}@example.test`, role: "OWNER" }));
     await checked(admin.from("customers").insert({ id: foreignCustomer, organization_id: foreignOrg, name: "Client PDF Fictif B", type: "company" }));
-    await checked(admin.from("invoices").insert({ id: foreignInvoice, organization_id: foreignOrg, customer_id: foreignCustomer, created_by_user_id: foreignUser, invoice_number: "FAC-2026-000001", issue_date: "2026-10-05", due_date: "2026-11-05" }));
+    await checked(admin.from("invoices").insert({ id: foreignInvoice, organization_id: foreignOrg, customer_id: foreignCustomer, created_by_user_id: foreignUser, due_date: "2026-11-05" }));
     expect((await page.request.get(`/api/invoices/${foreignInvoice}/pdf`)).status()).toBe(404);
     await checked(admin.from("users").update({ role: "TECHNICIAN" }).eq("id", owner.id));
     expect((await page.request.get(url)).status()).toBe(403);

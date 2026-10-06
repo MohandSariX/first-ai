@@ -7,9 +7,9 @@ export const INVOICE_STATUSES = ["draft", "issued", "sent", "partially_paid", "p
 export const createDraftInvoiceSchema = z.strictObject({
   ...invoiceClassificationSchema.partial().shape,
   customerId: z.uuid(), quoteId: z.uuid().optional(), jobId: z.uuid().optional(),
-  issueDate: z.iso.date(), dueDate: z.iso.date(),
+  dueDate: z.iso.date(),
   notes: z.string().trim().max(5000).optional(), internalNotes: z.string().trim().max(5000).optional(),
-}).refine(v => v.dueDate >= v.issueDate, { path: ["dueDate"], message: "L’échéance doit suivre la date d’émission." });
+});
 export const addInvoiceItemSchema = quoteItemSchema.omit({ costEstimate: true });
 export const updateInvoiceItemSchema = addInvoiceItemSchema.partial();
 export const searchInvoicesSchema = z.strictObject({

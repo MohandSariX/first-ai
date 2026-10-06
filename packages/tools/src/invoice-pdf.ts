@@ -81,7 +81,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
       return top;
     };
     y = Math.max(identity(snapshot.seller, "Vendeur", 42), identity(snapshot.customer, "Client facturé", 310)) + 18;
-    if (snapshot.version === 2) {
+    if (snapshot.version !== 1) {
       const seller = snapshot.seller.fiscalIdentity, buyer = snapshot.customer.billingIdentity;
       if (seller.legalEntityType === "individual_entrepreneur") paragraph("Vendeur : Entrepreneur individuel (EI)");
       if (seller.legalForm) paragraph(`Forme juridique : ${seller.legalForm}`);

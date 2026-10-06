@@ -62,10 +62,12 @@ export class InvoiceService {
       const items = await s.invoices.items(sc);
       assertInvoiceIssuable(invoice.status, items.length);
       await this.validateLinks(s, c, invoice);
-      const issuedAt = new Date();
-      const documentSnapshot = createInvoiceDocumentSnapshot(invoice, items, await s.billingIdentity(sc, invoice.customerId), issuedAt);
+      const identity = await s.billingIdentity(sc, invoice.customerId);
+      const allocation = await s.invoices.allocateFiscalNumber(sc);
+      if (invoice.dueDate < allocation.issueDate) throw new OperationalConflictError("L’échéance est antérieure à la date réelle d’émission. Créez un brouillon avec une échéance valide ; l’antidatage n’est pas autorisé.");
+      const documentSnapshot = createInvoiceDocumentSnapshot({ ...invoice, ...allocation }, items, identity, allocation.issuedAt, { issuedAt: allocation.issuedAt.toISOString(), timeZone: allocation.timeZone, fiscalYear: allocation.fiscalYear });
       if (!invoiceDocumentAvailability(documentSnapshot).available) throw new OperationalConflictError("Émission impossible : configurez le nom, l’adresse, le code postal, la ville et le pays du vendeur avant l’émission.");
-      return found(await s.invoices.update(sc, { ...documentSnapshot.totals, amountDue: documentSnapshot.totals.total, status: "issued", issuedAt, documentSnapshot }));
+      return found(await s.invoices.update(sc, { invoiceNumber: allocation.invoiceNumber, issueDate: allocation.issueDate, ...documentSnapshot.totals, amountDue: documentSnapshot.totals.total, status: "issued", issuedAt: allocation.issuedAt, documentSnapshot }));
     });
   }
   async getInvoiceDocument(c: CurrentBusinessUser, id: string): Promise<InvoiceDocumentView> {

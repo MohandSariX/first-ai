@@ -6,9 +6,9 @@ test("owner issues an invoice and records partial/full fictional receipts on mob
   await expect(page.getByRole("heading", { name: "Tableau de bord" })).toBeVisible();
   await page.goto("/invoices"); await page.getByText("Nouvelle facture", { exact: true }).click();
   await page.getByLabel("Client", { exact: true }).selectOption({ label: e2eFixture.operationalCustomerName });
-  await page.getByLabel("Date d’émission prévue").fill("2026-10-05"); await page.getByLabel("Échéance").fill("2026-11-05"); await page.getByRole("button", { name: "Créer le brouillon" }).click();
+  await page.getByLabel("Échéance").fill("2026-11-05"); await page.getByRole("button", { name: "Créer le brouillon" }).click();
   await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: /FAC-2026-\d{6}/, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^BROUILLON-/, level: 1 })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   const add = page.getByRole("form", { name: "Ajouter une ligne" });
   await add.getByLabel("Description").fill("Facturation fictive E2E"); await add.getByLabel("Quantité").fill("2"); await add.getByLabel("Prix unitaire HT (€)").fill("100.10"); await add.getByLabel("TVA (%)").fill("20"); await add.getByRole("button", { name: "Ajouter la ligne" }).click();

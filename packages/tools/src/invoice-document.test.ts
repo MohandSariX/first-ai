@@ -70,7 +70,7 @@ describe("invoice documents", () => {
     const view = fixture(); view.snapshot.customer.name = "客户";
     await expect(generateInvoicePdf(view)).rejects.toMatchObject({ code: "CONFLICT" });
   });
-  it("renders v2 billing address, fiscal identity and explicit classifications without altering legacy v1", async () => {
+  it("renders v2/v3 identities and definitive issue number/date without altering legacy v1/v2", async () => {
     const view = fixture(), legacy = structuredClone(view.snapshot);
     view.snapshot = invoiceDocumentSnapshotSchema.parse({ ...view.snapshot, version: 2,
       seller: { ...view.snapshot.seller, fiscalIdentity: { legalName: "Société Fictive Test", legalEntityType: "company", legalForm: "SAS", siren: "123456789", siret: null, vatNumber: "FR00123456789", registration: "RCS Paris (fictif)", shareCapital: "1000.00", vatRegime: "normal", vatOnDebits: false, companySize: "sme", addressLine1: "1 Rue Fictive", addressLine2: null, postalCode: "75001", city: "Paris", country: "FR" } },
@@ -83,5 +83,19 @@ describe("invoice documents", () => {
     expect(invoiceDocumentSnapshotSchema.parse(legacy)).toEqual(legacy);
     expect(await generateInvoicePdf(view)).toEqual(bytes);
     if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-m1-qa.pdf", bytes);
+    const v2 = structuredClone(view.snapshot);
+    const capturedAt = "2026-12-31T23:00:00Z";
+    view.snapshot = invoiceDocumentSnapshotSchema.parse({ ...v2, version: 3, capturedAt,
+      issuance: { issuedAt: capturedAt, timeZone: "Europe/Paris", fiscalYear: 2027 },
+      invoice: { ...v2.invoice, number: "FAC-2027-000001", issueDate: "2027-01-01", dueDate: "2027-02-01" },
+    });
+    view.payment.asOf = "2027-01-02T12:00:00Z";
+    const v3Bytes = await generateInvoicePdf(view), v3Text = renderedText(v3Bytes);
+    for (const expected of ["FAC-2027-000001", "Émission : 01/01/2027", "2 Rue Facturation", "B2B - Services - TVA normale", "225,50 €"]) expect(v3Text).toContain(expected);
+    expect(invoiceDocumentSnapshotSchema.parse(v2)).toEqual(v2);
+    expect(invoiceDocumentSnapshotSchema.safeParse({ ...view.snapshot, invoice: { ...view.snapshot.invoice, issueDate: "2026-12-31" } }).success).toBe(false);
+    expect(invoiceDocumentSnapshotSchema.safeParse({ ...view.snapshot, issuance: { issuedAt: capturedAt, timeZone: "Europe/Paris", fiscalYear: 2026 } }).success).toBe(false);
+    expect(await generateInvoicePdf(view)).toEqual(v3Bytes);
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-m2-qa.pdf", v3Bytes);
   });
 });

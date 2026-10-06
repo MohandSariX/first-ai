@@ -36,5 +36,19 @@ export const invoiceDocumentSnapshotV2Schema = invoiceDocumentSnapshotV1Schema.e
   customer: identity.extend({ billingIdentity: customerBillingSchema }),
   classification: invoiceClassificationSchema,
 });
-export const invoiceDocumentSnapshotSchema = z.discriminatedUnion("version", [invoiceDocumentSnapshotV1Schema, invoiceDocumentSnapshotV2Schema]);
+export function invoiceIssueCalendar(instant: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+  const value = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  return { issueDate: `${value("year")}-${value("month")}-${value("day")}`, fiscalYear: Number(value("year")) };
+}
+export const invoiceDocumentSnapshotV3Schema = invoiceDocumentSnapshotV2Schema.extend({
+  version: z.literal(3),
+  issuance: z.strictObject({ issuedAt: z.iso.datetime(), timeZone: z.string().min(1).max(100), fiscalYear: z.number().int().min(1000).max(9999) }),
+}).superRefine((snapshot, context) => {
+  try {
+    const date = invoiceIssueCalendar(new Date(snapshot.issuance.issuedAt), snapshot.issuance.timeZone);
+    if (snapshot.capturedAt !== snapshot.issuance.issuedAt || date.issueDate !== snapshot.invoice.issueDate || date.fiscalYear !== snapshot.issuance.fiscalYear || !snapshot.invoice.number.startsWith(`FAC-${date.fiscalYear}-`) || snapshot.invoice.dueDate < date.issueDate) context.addIssue({ code: "custom", message: "Métadonnées d’émission incohérentes." });
+  } catch { context.addIssue({ code: "custom", message: "Fuseau d’émission invalide." }); }
+});
+export const invoiceDocumentSnapshotSchema = z.discriminatedUnion("version", [invoiceDocumentSnapshotV1Schema, invoiceDocumentSnapshotV2Schema, invoiceDocumentSnapshotV3Schema]);
 export type InvoiceDocumentSnapshot = z.infer<typeof invoiceDocumentSnapshotSchema>;

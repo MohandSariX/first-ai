@@ -2,20 +2,20 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CurrentBusinessUser } from "@first-ai/auth";
 import { and, eq } from "drizzle-orm";
-import { createDatabaseClient, customers, customerSites, invoices, invoiceItems, InvoiceStore, jobs, organizations, quotes, services, users, payments, PaymentStore } from "@first-ai/database";
+import { createDatabaseClient, customers, customerSites, invoices, invoiceItems, invoiceNumberCounters, InvoiceStore, jobs, organizations, quotes, services, users, payments, PaymentStore } from "@first-ai/database";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { InvoiceService } from "./invoice-service.js";
 import { createInvoiceToolRegistry } from "./invoice-tools.js";
 import { PaymentService } from "./payment-service.js";
 import { BillingIdentityService } from "./billing-service.js";
-import { sellerBillingSchema, customerBillingSchema } from "@first-ai/schemas";
+import { sellerBillingSchema, customerBillingSchema, invoiceIssueCalendar } from "@first-ai/schemas";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
   const clientOptions = { auth: { autoRefreshToken: false, persistSession: false } };
   let db: ReturnType<typeof createDatabaseClient>, service: InvoiceService, store: InvoiceStore, admin: SupabaseClient, paymentService: PaymentService;
   const clients: SupabaseClient[] = [], contexts: CurrentBusinessUser[] = [], created: string[] = [], sourceQuotes: string[] = [], sourceJobs: string[] = [], sourceServices: string[] = [];
-  const draft = (customerId: string) => ({ customerId, issueDate: "2026-10-05", dueDate: "2026-11-05", transactionType: "B2B" as const, operationCategory: "services" as const, fiscalTerritory: "domestic" as const, vatTreatment: "normal" as const, vatReason: null });
+  const draft = (customerId: string) => ({ customerId, dueDate: "2026-11-05", transactionType: "B2B" as const, operationCategory: "services" as const, fiscalTerritory: "domestic" as const, vatTreatment: "normal" as const, vatReason: null });
   beforeAll(async () => {
     for (const name of ["DATABASE_URL", "SUPABASE_URL"]) if (!["localhost", "127.0.0.1"].includes(new URL(process.env[name] ?? "missing").hostname)) throw new Error("Invoice integration refuses non-local configuration.");
     admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, clientOptions);
@@ -49,10 +49,61 @@ describe("local invoice foundation", () => {
     if (admin) for (const id of authIds) { const result = await admin.auth.admin.deleteUser(id); if (result.error) errors.push(result.error); }
     if (errors.length) throw new AggregateError(errors, "Invoice fixture cleanup failed.");
   });
-  it("allocates consecutive invoice numbers safely under concurrency", async () => {
-    const rows = await Promise.all([service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!)), service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!))]);
-    expect(rows.map(r => r.invoiceNumber).sort()).toEqual(["FAC-2026-000002", "FAC-2026-000003"]);
-    expect((await service.getInvoice(contexts[1]!, created[1]!)).invoiceNumber).toBe("FAC-2026-000001");
+  it("M2 numbers only issuance, in reverse draft order, without gaps from cancelled/deleted drafts", async () => {
+    const c = contexts[0]!, rows = [];
+    for (let n = 0; n < 4; n++) rows.push(await service.createDraftInvoice(c, draft(customerIds[0]!)));
+    for (const row of rows) expect(row).toMatchObject({ invoiceNumber: null, issueDate: null, issuedAt: null, draftReference: `BROUILLON-${row.id}` });
+    expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).toEqual([]);
+    await service.cancelInvoice(c, rows[2]!.id);
+    await db.update(invoices).set({ deletedAt: new Date() }).where(eq(invoices.id, rows[3]!.id));
+    for (const row of rows.slice(0, 2)) await service.addInvoiceItem(c, row.id, { description: "Chronologie fictive", quantity: "1", unitPrice: "10", taxRate: "20" });
+    const b = await service.issueInvoice(c, rows[1]!.id), a = await service.issueInvoice(c, rows[0]!.id);
+    const year = invoiceIssueCalendar(b.issuedAt!, "Europe/Paris").fiscalYear;
+    expect(b.invoiceNumber).toBe(`FAC-${year}-000001`); expect(a.invoiceNumber).toBe(`FAC-${year}-000002`);
+    expect(a.issuedAt!.getTime()).toBeGreaterThanOrEqual(b.issuedAt!.getTime());
+    expect(a.issueDate).toBe(invoiceIssueCalendar(a.issuedAt!, "Europe/Paris").issueDate);
+    expect(a.documentSnapshot).toMatchObject({ version: 3, invoice: { number: a.invoiceNumber, issueDate: a.issueDate }, issuance: { issuedAt: a.issuedAt!.toISOString(), timeZone: "Europe/Paris", fiscalYear: year } });
+    const retry = await service.issueInvoice(c, a.id);
+    expect(retry.invoiceNumber).toBe(a.invoiceNumber); expect(retry.issueDate).toBe(a.issueDate); expect(retry.issuedAt).toEqual(a.issuedAt); expect(retry.documentSnapshot).toEqual(a.documentSnapshot);
+    expect((await service.getInvoice(contexts[1]!, created[1]!)).invoiceNumber).toBeNull();
+    for (const query of [a.invoiceNumber!, a.draftReference]) expect(await service.searchInvoices(c, { query })).toEqual(expect.arrayContaining([expect.objectContaining({ invoice: expect.objectContaining({ id: a.id }) })]));
+  });
+  it("M2 serializes concurrent issues into unique consecutive committed numbers", async () => {
+    const c = contexts[0]!, drafts = await Promise.all([service.createDraftInvoice(c, draft(customerIds[0]!)), service.createDraftInvoice(c, draft(customerIds[0]!))]);
+    for (const row of drafts) await service.addInvoiceItem(c, row.id, { description: "Concurrence fictive", quantity: "1", unitPrice: "10", taxRate: "20" });
+    const results = await Promise.all(drafts.map(row => service.issueInvoice(c, row.id)));
+    const year = invoiceIssueCalendar(results[0]!.issuedAt!, "Europe/Paris").fiscalYear;
+    expect(results.map(i => i.invoiceNumber).sort()).toEqual([`FAC-${year}-000003`, `FAC-${year}-000004`]);
+    const sorted = results.sort((a,b) => a.invoiceNumber!.localeCompare(b.invoiceNumber!));
+    expect(sorted[1]!.issuedAt!.getTime()).toBeGreaterThanOrEqual(sorted[0]!.issuedAt!.getTime());
+    // Fictional privileged deletion is not a production retention workflow (M5 remains deferred).
+    await db.delete(invoices).where(eq(invoices.id, sorted[1]!.id));
+    const next = await service.createDraftInvoice(c, draft(customerIds[0]!));
+    await service.addInvoiceItem(c, next.id, { description: "Réservation durable fictive", quantity: "1", unitPrice: "10", taxRate: "20" });
+    expect((await service.issueInvoice(c, next.id)).invoiceNumber).toBe(`FAC-${year}-000005`);
+  });
+  it("M2 starts a separate annual series and resumes legacy high-water marks without renumbering", async () => {
+    const c = contexts[1]!, calendar = invoiceIssueCalendar(new Date(), "Europe/Paris"), year = calendar.fiscalYear;
+    await db.insert(invoiceNumberCounters).values({ organizationId: c.organizationId, fiscalYear: year - 1, lastNumber: 42, lastIssuedAt: new Date(`${year - 1}-12-30T12:00:00Z`), lastIssueDate: `${year - 1}-12-30`, lastInvoiceId: randomUUID() });
+    const first = await service.issueInvoice(c, created[1]!);
+    expect(first.invoiceNumber).toBe(`FAC-${year}-000001`);
+    const historical = await db.select().from(invoiceNumberCounters).where(and(eq(invoiceNumberCounters.organizationId, c.organizationId), eq(invoiceNumberCounters.fiscalYear, year - 1)));
+    expect(historical[0]!.lastNumber).toBe(42);
+    await expect(db.update(invoiceNumberCounters).set({ lastNumber: 1 }).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.delete(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    // Preserve the issued document even when the counter's next allocation belongs to another invoice.
+    const saved = structuredClone(first.documentSnapshot);
+    expect((await service.issueInvoice(c, first.id)).documentSnapshot).toEqual(saved);
+  });
+  it("M2 forbids changing/reusing issued numbers and denies public counter/RPC access", async () => {
+    const issued = await service.issueInvoice(contexts[1]!, created[1]!);
+    for (const patch of [{ invoiceNumber: "FAC-2026-999999" }, { issueDate: "2099-01-01" }, { issuedAt: new Date("2099-01-01T00:00:00Z") }, { draftReference: "BROUILLON-edited" }]) await expect(db.update(invoices).set(patch).where(eq(invoices.id, issued.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.insert(invoices).values({ ...draft(customerIds[1]!), organizationId: orgs[1]!, createdByUserId: userIds[1]!, invoiceNumber: issued.invoiceNumber })).rejects.toMatchObject({ cause: { code: "23514" } });
+    const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, clientOptions);
+    for (const client of [anon, clients[0]!, clients[1]!]) {
+      expect((await client.from("invoice_number_counters").select("*")).error).not.toBeNull();
+      expect((await client.rpc("allocate_invoice_number", { p_org: orgs[1], p_invoice: created[1] })).error).not.toBeNull();
+    }
   });
   it("protects list and exact UUID reads symmetrically with actual authenticated RLS", async () => {
     for (let n = 0; n < 2; n++) for (const table of ["invoices", "invoice_items"]) {
@@ -89,7 +140,7 @@ describe("local invoice foundation", () => {
     expect(await service.searchInvoices(contexts[0]!, {})).toEqual(expect.arrayContaining([expect.objectContaining({ invoice: expect.objectContaining({ organizationId: orgs[0]! }) })]));
   });
   it("rejects cross-tenant customer, quote, job and service relations in PostgreSQL", async () => {
-    for (const extra of [{ customerId: customerIds[1]! }, { quoteId: sourceQuotes[1]! }, { jobId: sourceJobs[1]! }]) await expect(db.insert(invoices).values({ organizationId: orgs[0]!, createdByUserId: userIds[0]!, ...draft(customerIds[0]!), invoiceNumber: `INVALID-${randomUUID().slice(0, 16)}`, ...extra })).rejects.toMatchObject({ cause: { code: "23503" } });
+    for (const extra of [{ customerId: customerIds[1]! }, { quoteId: sourceQuotes[1]! }, { jobId: sourceJobs[1]! }]) await expect(db.insert(invoices).values({ organizationId: orgs[0]!, createdByUserId: userIds[0]!, ...draft(customerIds[0]!), ...extra })).rejects.toMatchObject({ cause: { code: "23503" } });
     await expect(db.insert(invoiceItems).values({ organizationId: orgs[0]!, invoiceId: created[0]!, serviceId: sourceServices[1]!, description: "Invalid", quantity: "1", unitPrice: "1", taxRate: "20" })).rejects.toMatchObject({ cause: { code: "23503" } });
     await expect(db.insert(invoiceItems).values({ organizationId: orgs[0]!, invoiceId: created[1]!, description: "Invalid parent", quantity: "1", unitPrice: "1", taxRate: "20" })).rejects.toMatchObject({ cause: { code: "23503" } });
   });
@@ -128,8 +179,8 @@ describe("local invoice foundation", () => {
   }
   it("atomically captures available billing identities and freezes issued document data", async () => {
     const invoice = await issued(), c = contexts[0]!, before = await service.getInvoiceDocument(c, invoice.id);
-    expect(before.snapshot).toMatchObject({ version: 2, organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: "2 Rue de Facturation Fictive" }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
-    if (before.snapshot.version !== 2) throw new Error("Expected new document v2");
+    expect(before.snapshot).toMatchObject({ version: 3, organizationId: c.organizationId, invoiceId: invoice.id, seller: { name: "Fictional invoice tenant 0", legalName: "Fictional seller 0", addressLine1: "1 Rue Fictive" }, customer: { name: "Fictional invoice customer 0", addressLine1: "2 Rue de Facturation Fictive" }, invoice: { number: invoice.invoiceNumber, status: "issued" }, totals: { total: "100.00" }, lines: [expect.objectContaining({ description: "Fictional payment line" })] });
+    if (before.snapshot.version !== 3) throw new Error("Expected new document v3");
     try {
       await db.update(customers).set({ name: "Changed customer", legalName: "Changed legal identity" }).where(eq(customers.id, customerIds[0]!));
       await db.update(organizations).set({ legalName: "Changed seller", addressLine1: "Changed address" }).where(eq(organizations.id, orgs[0]!));
@@ -150,6 +201,7 @@ describe("local invoice foundation", () => {
   });
   it("rolls back issue if snapshot validation or persistence fails", async () => {
     const invoice = await service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!));
+    const counterBefore = await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, orgs[0]!));
     await service.addInvoiceItem(contexts[0]!, invoice.id, { description: "Rollback", quantity: "1", unitPrice: "10", taxRate: "20" });
     try {
       await db.update(organizations).set({ currency: "USD" }).where(eq(organizations.id, orgs[0]!));
@@ -163,7 +215,21 @@ describe("local invoice foundation", () => {
     } finally { await db.update(organizations).set({ addressLine1: "1 Rue Fictive" }).where(eq(organizations.id, orgs[0]!)); }
     const failing = new InvoiceService({ ...store, invoices: store.invoices, customer: store.customer.bind(store), service: store.service.bind(store), quotes: store.quotes, jobs: store.jobs, timezone: store.timezone.bind(store), transaction: fn => store.transaction(async s => { s.invoices.update = async () => { throw new Error("Snapshot persistence failure"); }; return fn(s); }) });
     await expect(failing.issueInvoice(contexts[0]!, invoice.id)).rejects.toThrow("Snapshot persistence failure");
-    expect(await service.getInvoice(contexts[0]!, invoice.id)).toMatchObject({ status: "draft", issuedAt: null, documentSnapshot: null });
+    expect(await service.getInvoice(contexts[0]!, invoice.id)).toMatchObject({ status: "draft", invoiceNumber: null, issueDate: null, issuedAt: null, documentSnapshot: null });
+    expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, orgs[0]!))).toEqual(counterBefore);
+    const successful = await service.issueInvoice(contexts[0]!, invoice.id);
+    expect(Number(successful.invoiceNumber!.slice(-6))).toBe(counterBefore[0]!.lastNumber + 1);
+  });
+  it("M2 rejects client-controlled dates and expired due dates without consuming a number", async () => {
+    const c = contexts[0]!;
+    for (const date of ["2099-01-01", "2000-01-01"]) await expect(service.createDraftInvoice(c, { ...draft(customerIds[0]!), issueDate: date })).rejects.toThrow();
+    const row = await service.createDraftInvoice(c, { ...draft(customerIds[0]!), dueDate: "2000-01-01" });
+    await service.addInvoiceItem(c, row.id, { description: "Échéance fictive passée", quantity: "1", unitPrice: "10", taxRate: "20" });
+    const before = await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId));
+    await expect(service.issueInvoice(c, row.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await service.getInvoice(c, row.id)).toMatchObject({ status: "draft", issueDate: null, invoiceNumber: null });
+    expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).toEqual(before);
+    await expect(db.update(invoices).set({ issueDate: "2099-01-01" }).where(eq(invoices.id, row.id))).rejects.toMatchObject({ cause: { code: "23514" } });
   });
   it("denies known foreign document UUIDs and revalidates membership/role before download", async () => {
     const a = await issued(), b = await issued(1), c = contexts[0]!;
@@ -178,11 +244,14 @@ describe("local invoice foundation", () => {
       expect((await service.getInvoiceDocument({ ...c, role: "READ_ONLY" }, a.id)).snapshot.invoiceId).toBe(a.id);
     } finally { await db.update(users).set({ role: "OWNER", status: "active", deletedAt: null }).where(eq(users.id, c.userId)); }
   });
-  it("does not silently backfill legacy issued invoices or issue without a snapshot", async () => {
-    const legacy = (await db.insert(invoices).values({ organizationId: orgs[0]!, createdByUserId: userIds[0]!, ...draft(customerIds[0]!), invoiceNumber: "LEGACY-FICTIONAL", status: "issued", issuedAt: new Date() }).returning())[0]!;
-    await expect(service.getInvoiceDocument(contexts[0]!, legacy.id)).rejects.toMatchObject({ code: "CONFLICT" });
-    expect((await service.issueInvoice(contexts[0]!, legacy.id)).documentSnapshot).toBeNull();
+  it("preserves legacy retry behavior and disallows new privileged issued inserts/imports", async () => {
     const next = await service.createDraftInvoice(contexts[0]!, draft(customerIds[0]!));
+    const legacy = { ...next, invoiceNumber: "LEGACY-FICTIONAL", issueDate: "2026-01-01", status: "issued" as const, issuedAt: new Date("2026-01-01T00:00:00Z") };
+    // Simulate a pre-existing historical row without disabling any DB guard to manufacture it.
+    const legacyService = new InvoiceService({ ...store, invoices: store.invoices, customer: store.customer.bind(store), service: store.service.bind(store), quotes: store.quotes, jobs: store.jobs, timezone: store.timezone.bind(store), transaction: fn => store.transaction(async s => { s.invoices.get = async () => legacy; return fn(s); }) });
+    await expect(legacyService.getInvoiceDocument(contexts[0]!, legacy.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await legacyService.issueInvoice(contexts[0]!, legacy.id)).toEqual(legacy);
+    await expect(db.insert(invoices).values({ organizationId: orgs[0]!, createdByUserId: userIds[0]!, ...draft(customerIds[0]!), invoiceNumber: "LEGACY-FICTIONAL", status: "issued", issuedAt: new Date(), issueDate: "2026-01-01" })).rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(db.update(invoices).set({ status: "issued", issuedAt: new Date() }).where(eq(invoices.id, next.id))).rejects.toMatchObject({ cause: { code: "23514" } });
   });
   it("records partial then full payment atomically and replays the same request exactly once", async () => {
@@ -301,7 +370,7 @@ describe("local invoice foundation", () => {
   it("M1 blocks missing explicit qualifications and captures complete B2B/B2C/B2G scenarios", async () => {
     const c = contexts[0]!, billing = new BillingIdentityService(store), customer = await billing.getCustomer(c, customerIds[0]!);
     const original = customerBillingSchema.parse(Object.fromEntries(Object.keys(customerBillingSchema.shape).map(k => [k, customer[k as keyof typeof customer]])));
-    const next = await service.createDraftInvoice(c, { customerId: customerIds[0], issueDate: "2026-10-05", dueDate: "2026-11-05" });
+    const next = await service.createDraftInvoice(c, { customerId: customerIds[0], dueDate: "2026-11-05" });
     await service.addInvoiceItem(c, next.id, { description: "M1 test", quantity: "1", unitPrice: "10", taxRate: "20" });
     await expect(service.issueInvoice(c, next.id)).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await service.getInvoice(c, next.id)).toMatchObject({ status: "draft", documentSnapshot: null, issuedAt: null });
@@ -316,7 +385,7 @@ describe("local invoice foundation", () => {
         const invoice = await service.createDraftInvoice(c, { ...draft(customer.id), transactionType: transaction, operationCategory: category });
         await service.addInvoiceItem(c, invoice.id, { description: "Scenario fictif", quantity: "1", unitPrice: "10", taxRate: "20" });
         const issued = await service.issueInvoice(c, invoice.id);
-        expect(issued.documentSnapshot).toMatchObject({ version: 2, classification: { transactionType: transaction, operationCategory: category }, customer: { addressLine1: original.billingAddressLine1 } });
+        expect(issued.documentSnapshot).toMatchObject({ version: 3, classification: { transactionType: transaction, operationCategory: category }, customer: { addressLine1: original.billingAddressLine1 } });
         await expect(service.updateClassification(c, issued.id, classification)).rejects.toMatchObject({ code: "CONFLICT" });
         await expect(db.update(invoices).set({ operationCategory: "services" === category ? "goods" : "services" }).where(eq(invoices.id, issued.id))).rejects.toMatchObject({ cause: { code: "23514" } });
         const before = structuredClone(issued.documentSnapshot);
@@ -332,7 +401,7 @@ describe("local invoice foundation", () => {
       await billing.updateSeller(c, { ...original, legalEntityType: "individual_entrepreneur", legalForm: null, shareCapital: null, vatRegime: "franchise", vatNumber: null });
       const invoice = await service.createDraftInvoice(c, { ...draft(customerIds[0]!), vatTreatment: "franchise" });
       await service.addInvoiceItem(c, invoice.id, { description: "Franchise fictive", quantity: "1", unitPrice: "10", taxRate: "0" });
-      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toMatchObject({ version: 2, seller: { fiscalIdentity: { vatRegime: "franchise", shareCapital: null } }, classification: { vatTreatment: "franchise" }, totals: { total: "10.00" } });
+      expect((await service.issueInvoice(c, invoice.id)).documentSnapshot).toMatchObject({ version: 3, seller: { fiscalIdentity: { vatRegime: "franchise", shareCapital: null } }, classification: { vatTreatment: "franchise" }, totals: { total: "10.00" } });
       await billing.updateSeller(c, original);
       expect((await service.getInvoiceDocument(c, invoice.id)).snapshot.seller.vatNumber).toBeNull();
     } finally { await billing.updateSeller(c, original); }

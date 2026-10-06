@@ -6,7 +6,7 @@ import { OperationalConflictError } from "./operational-policies.js";
 type Identity = Awaited<ReturnType<InvoiceSession["billingIdentity"]>>;
 function cents(v: string) { return BigInt(v.replace(".", "")); }
 function money(v: bigint) { const s = v.toString().padStart(3, "0"); return `${s.slice(0, -2)}.${s.slice(-2)}`; }
-export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly InvoiceItem[], identity: Identity, capturedAt: Date): InvoiceDocumentSnapshot {
+export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly InvoiceItem[], identity: Identity, capturedAt: Date, issuance: { issuedAt: string; timeZone: string; fiscalYear: number }): InvoiceDocumentSnapshot {
   const { seller, customer } = identity;
   if (!seller || !customer || seller.id !== invoice.organizationId || customer.organizationId !== invoice.organizationId || customer.id !== invoice.customerId) throw new OperationalConflictError("Identité de facturation indisponible.");
   if (seller.currency !== "EUR") throw new OperationalConflictError("Seules les factures en EUR sont prises en charge.");
@@ -27,7 +27,7 @@ export function createInvoiceDocumentSnapshot(invoice: Invoice, items: readonly 
   for (const line of lines) { const g = groups.get(line.taxRate) ?? { base: 0n, amount: 0n }; g.base += cents(line.subtotal); g.amount += cents(line.taxAmount); groups.set(line.taxRate, g); }
   const { subtotal, taxAmount, total } = calculateQuoteTotals(items.map(i => ({ ...i, costEstimate: "0" })));
   return invoiceDocumentSnapshotSchema.parse({
-    version: 2, organizationId: invoice.organizationId, invoiceId: invoice.id,
+    version: 3, issuance, organizationId: invoice.organizationId, invoiceId: invoice.id,
     capturedAt: capturedAt.toISOString(), currency: seller.currency,
     seller: { name: seller.name, legalName: seller.legalName, addressLine1: seller.addressLine1, addressLine2: seller.addressLine2, postalCode: seller.postalCode, city: seller.city, country: seller.country, siret: seller.siret, vatNumber: seller.vatNumber, email: seller.email, phone: seller.phone, fiscalIdentity: fiscalIdentity.data },
     customer: { name: billing.billingName, legalName: billing.billingLegalName, addressLine1: billing.billingAddressLine1, addressLine2: billing.billingAddressLine2, postalCode: billing.billingPostalCode, city: billing.billingCity, country: billing.billingCountry, siret: billing.siret, vatNumber: billing.vatNumber, email: customer.billingEmail, phone: customer.phone, billingIdentity: billing },

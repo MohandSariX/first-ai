@@ -1,6 +1,6 @@
 # FIRST AI — Current state
 
-Photographie du repository inspecté le 2026-10-05, pas un historique ni une preuve
+Photographie du repository inspecté le 2026-10-06, pas un historique ni une preuve
 de déploiement. Les références détaillées restent dans les documents fondateurs
 et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 
@@ -50,18 +50,20 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 
 ## Base actuelle
 
-19 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
+20 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
 
 - Identité/CRM : `organizations`, `users`, `customers`, `contacts`, `customer_sites`,
   `leads`, `services`.
 - Opérations : `quotes`, `quote_items`, `jobs`, `job_reports`.
-- Facturation : `invoices`, `invoice_items`, `payments`.
+- Facturation : `invoices`, `invoice_items`, `payments`, `invoice_number_counters` (privée).
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Quatorze migrations 0000–0013 dans `packages/database/drizzle/`, seule source de migration
-applicative. Dernière : `0013_tiresome_komodo.sql`, champs structurés d’identité
-vendeur/client et classification facture ; snapshot v2 obligatoire aux nouvelles
-émissions et classification SQL immuable. Aucun backfill des snapshots historiques.
+Seize migrations 0000–0015 dans `packages/database/drizzle/`, seule source de migration
+applicative. M2 : `0014_strange_enchantress.sql` ajoute référence interne et compteur
+transactionnel, nullable numéro/date avant issue et protections SQL ; dernière
+`0015_fix_invoice_allocator_conflict.sql` corrige la cible ON CONFLICT sans réécrire
+0014 déjà appliquée. Snapshot v3 obligatoire aux nouvelles émissions ; identités
+et classification M1 conservées. Aucun backfill des snapshots historiques.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
 second passage sûr via tracking Drizzle ; aucune application distante effectuée.
 UUID, timestamptz UTC, montants NUMERIC/chaînes décimales ; soft-delete des entités
@@ -89,8 +91,13 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   requise avant fin d'intervention ; suivi recommandé flag/date, sans job automatique.
   Coûts/marges réels non calculés. Détails mobiles sans table horizontale.
 - Factures : création manuelle de brouillons, recherche/statut/pagination, lignes
-  éditables et totaux HT/TVA/TTC exacts via le moteur BigInt des devis. Numérotation
-  FAC-YYYY-000001 par tenant/année de date d’émission, verrou organisation/unique.
+  éditables et totaux HT/TVA/TTC exacts via le moteur BigInt des devis.
+  Référence BROUILLON-UUID interne, sans FAC/date avant émission. FAC-YYYY-000001
+  par tenant/année alloué au commit d’émission via compteur privé transactionnel
+  et advisory lock tenant, rollback-safe, sans trous dus aux brouillons abandonnés.
+  Date civile/année depuis l’instant serveur PostgreSQL et le fuseau organisation ;
+  pas de date manuelle/future/antidatage. Legacy émis inchangé, reprise au high-water
+  mark connu, pas de réparation de trous historiques. Recul de chronologie refusé.
   Émission explicite d’un brouillon non vide, lignes ensuite figées ; retry idempotent.
   Annulation de brouillon seulement. Liens facultatifs devis accepté/intervention
   terminée, client/tenant cohérents et états revalidés à l’émission. Pas de conversion
@@ -98,8 +105,9 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   `docs/architecture/invoices.md`. Envoi/perte conservés dans l’enum sans opérations.
 - Document facture : snapshot Zod/versionné figé atomiquement à l’émission avec
   identités vendeur/client, lignes, dates, numéro, notes client, totaux et TVA par taux.
-  V2 capture identités fiscales/de facturation et classification explicite ; V1 reste
-  lisible, inchangé. Profil vendeur dans `/settings/billing` (OWNER/ADMIN write),
+  V3 capture identités fiscales/de facturation, classification explicite et metadata
+  d’émission (instant/fuseau/année) ; V1/V2 restent lisibles, inchangés.
+  Profil vendeur dans `/settings/billing` (OWNER/ADMIN write),
   identité/adresse client dédiée dans sa fiche (rôles invoices.write autorisés),
   classification B2B/B2C/B2G, services/goods/mixed et traitement TVA dans le brouillon.
   Émission domestique FR seulement, données applicables requises selon scénario ;
@@ -217,15 +225,15 @@ Pas encore de viewer de traces ni d'audit complet des mutations humaines.
   ni audit/rétention fiscale complet contre administration privilégiée.
   Pas d’email/avoirs/export ou Billing Agent ;
   corrections après émission et cardinalité de facturation partielle à cadrer.
-  Audit fiscal français documentaire terminé au 2026-10-05 ; M1 implémenté,
-  conformité non établie. Numéros réservés dès le brouillon : ordre et continuité
-  à l’émission non garantis. Mentions/TVA légales complètes, corrections/avoirs
+  Audit fiscal français documentaire terminé au 2026-10-05 ; M1/M2 implémentés,
+  conformité non établie. Numéro/date à l’émission protégés dans le workflow serveur,
+  mais historique non renuméroté et séries/émetteurs à qualifier. Mentions/TVA légales complètes, corrections/avoirs
   et conservation originale restent à implémenter/valider.
   Aucune plateforme de réception/émission ni e-reporting ; qualification fiscale
   de l’émetteur et du suivi encaissement B2C requise avant production.
   Voir [audit et spécification](../docs/compliance/france-invoicing-audit.md).
   Aucun audit complet des mutations factures simulé. Le sous-titre `/invoices`
-  dit encore « Aucun paiement, PDF ou envoi » : texte obsolète, non corrigé par l’audit.
+  distingue désormais référence interne et émission définitive.
   Outils invoices.get/search préparés Risk 0, non enregistrés avec les agents.
   Paiements manuels seulement, sans preuve bancaire/rapprochement, crédit non alloué
   ou remboursement. Les corrections peuvent remettre une facture à issued, sans
@@ -247,19 +255,24 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation M1 au 2026-10-05 : lint, typecheck,
-187 tests unitaires, 71 intégrations locales, build et 7 E2E passent.
-Migration 0013 appliquée localement, second passage sûr via tracking.
-Tests M1 : qualifications/permissions, capture/rollback, UUID/RLS/anonymous/révocation,
-profils modifiés et classification immuable ; formulaires et PDF v2 réels.
-PDFs v1/v2 courts/multipages rendus et vérifiés visuellement ; aucun provider IA.
+`supabase:start/stop/status`. Validation finale M2 au 2026-10-06 : lint, typecheck,
+188 tests unitaires, 75 intégrations locales, build et 7 E2E passent.
+Les premières reprises E2E ont rencontré une suspension réseau navigateur et des
+timeouts serveur/actions ; la dernière exécution complète passe sans modification
+du code ni des attentes. Cette instabilité locale reste à surveiller.
+Migrations 0014/0015 appliquées localement, seconds passages sûrs via tracking.
+Tests : M1 conservé, émission inversée/concurrente, rollback/retry/abandon,
+compteurs privés, numéro/date immuables et série annuelle/fuseau. PDF v3 réel.
+PDFs v1/v2 compatibles (tests de lecture/rendu) ; contrôle visuel v3 terminé,
+FAC/date civile définitifs affichés, sans référence brouillon comme numéro fiscal.
+Aucun provider IA.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
-Prochain jalon technique : **M2, numérotation fiscale à l’émission et chronologie**.
+Prochain jalon technique : **M3, mentions applicables et dates métier du document**.
 Qualification M0 de l’émetteur/flux et obligations déjà applicables reste nécessaire ;
-M1 ne la réalise pas automatiquement. Mentions M3, avoirs, rétention/Unicode
+M1/M2 ne la réalisent pas automatiquement. Mentions M3, avoirs, rétention/Unicode
 et intégration électronique restent des jalons distincts, selon priorité applicable.
 Le plan détaillé est dans l’audit ; aucun connecteur électronique n’est livré.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

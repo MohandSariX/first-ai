@@ -22,7 +22,7 @@ test("M1 billing configuration and explicit invoice classification are usable on
   await expect(page.getByRole("heading", { name: "Site Terrain Fictif" })).toBeVisible();
   await page.goto("/invoices"); await page.getByText("Nouvelle facture", { exact: true }).click();
   await page.getByLabel("Client", { exact: true }).selectOption({ label: e2eFixture.operationalCustomerName });
-  await page.getByLabel("Date d’émission prévue").fill("2026-10-05"); await page.getByLabel("Échéance").fill("2026-11-05");
+  await page.getByLabel("Échéance").fill("2026-11-05");
   await page.getByRole("button", { name: "Créer le brouillon" }).click();
   const add = page.getByRole("form", { name: "Ajouter une ligne" });
   await add.getByLabel("Description").fill("Prestation M1 fictive"); await add.getByLabel("Quantité").fill("1"); await add.getByLabel("Prix unitaire HT (€)").fill("10"); await add.getByLabel("TVA (%)").fill("20"); await add.getByRole("button", { name: "Ajouter la ligne" }).click();

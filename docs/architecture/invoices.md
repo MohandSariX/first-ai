@@ -4,7 +4,8 @@ Document/PDF delivery now builds on this foundation:
 [immutable invoice documents](invoice-documents.md). Issue captures a versioned
 snapshot atomically; PDF remains a technical, not fiscally certified, document.
 New issues require [M1 billing identities and explicit classification](billing-identities.md);
-historical snapshots are preserved. Draft numbering below is unchanged (M2 deferred).
+historical snapshots are preserved. [M2 fiscal numbering/date](invoice-numbering.md)
+now separates draft references and allocates definitive numbers only at issue.
 
 ## Scope and data
 
@@ -24,13 +25,14 @@ not redundantly stored; invoice totals are transactional snapshots.
 
 ## Numbering and calculations
 
-`FAC-YYYY-000001` is allocated server-side in a transaction under an organization
-row lock, with UNIQUE(organization_id, invoice_number). Year comes from the explicit
-issue date. Numbers are reserved when creating drafts, including cancelled and
-soft-deleted records; capacity is 999,999 per tenant/year. This is the existing quote
-numbering pattern, not a claim of production-ready fiscal numbering or legal compliance.
-Before production billing, review draft reservation, issue-date chronology, mandatory
-document details and correction/credit-note rules. No physical invoice deletion API exists.
+Drafts have an internal `BROUILLON-<UUID>` reference, no fiscal number/date.
+`FAC-YYYY-000001` is assigned in the issue transaction using a durable annual
+tenant counter and transaction lock, never a rollback-gapping PostgreSQL sequence.
+Year/date come from PostgreSQL issuance time in the organization timezone.
+Capacity is 999,999 per tenant/year; failed issue rolls back allocation, retry keeps
+the same number/document. Legacy issued numbers remain unchanged. See M2 for
+clock regression, migration and administrative limitations. No deletion API exists;
+this still does not certify fiscal compliance.
 
 The same BigInt fixed-point engine used by quotes computes HT rounded half-up per
 line, then VAT rounded per line using its explicit rate. Totals sum those rounded

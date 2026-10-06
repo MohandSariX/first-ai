@@ -230,6 +230,22 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Conséquences :** configuration vendeur OWNER/ADMIN, client par rôles de facturation ;
   membership/permissions relus aux accès. Émission domestique FR cadrée uniquement,
   cas internationaux/autres refusés ; v1 inchangé. Pas de certification d’identifiants
-  ni de conformité globale ; numéro au brouillon inchangé jusqu’à M2.
+  ni de conformité globale ; snapshot v3 et cycle de numéro désormais étendus par ADR-22.
 - **Sources :** `docs/architecture/billing-identities.md`, schémas/services billing,
   migration `0013_tiresome_komodo.sql`.
+
+## ADR-22 — Numéro fiscal et date alloués lors de l’émission
+
+- **Statut :** adopté, implémenté M2, sans certification fiscale globale.
+- **Décision :** référence interne UUID au brouillon ; compteur transactionnel durable
+  tenant/année FAC, advisory lock tenant, heure PostgreSQL et date civile du fuseau
+  organisation. Allocation, validation M1/calcul exact et snapshot v3 dans la même transaction.
+- **Raison :** ordre de création des brouillons, abandon et rollback ne doivent pas
+  dicter la chronologie ni consommer la séquence des factures émises. Pas de nextval.
+- **Conséquences :** retry garde le document, numéro/date émis immuables y compris legacy ;
+  aucune reprise d’un numéro supprimé. Séries annuelles à qualifier par l’émetteur,
+  historique conservé avec ses éventuels trous ; import/multi-émetteurs et antidatage
+  différés. Horloge/date reculant bloque l’émission. Guards/compteur privé ne remplacent
+  ni audit ni archivage M5 ; seules transactions complètes du service appellent l’allocateur.
+- **Sources :** `docs/architecture/invoice-numbering.md`, InvoiceService/InvoiceRepository,
+  migrations 0014/0015, audit §5/M2 et BOFiP §§70–140.

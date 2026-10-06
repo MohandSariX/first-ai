@@ -372,7 +372,8 @@ Chorus Pro/B2G reste un flux spécifique à cadrer si clients publics concernés
 profils structurés/UI, classification explicite et snapshot v2 des nouvelles
 émissions. Voir [périmètre, contrôles et limitations M1](../architecture/billing-identities.md).
 La matrice ci-dessus reste le constat historique du 05/10/2026, pas une matrice
-réécrite pour prétendre à la conformité ; M2–M7 et la qualification M0 restent ouverts.
+réécrite pour prétendre à la conformité ; M2 est livré techniquement ci-dessous,
+M3–M7 et la qualification M0 restent ouverts.
 
 - Petit modèle/UI vendeur et adresses client distinctes ; données fiscales
   qualifiées et champs conditionnels, aucune adresse de site implicite.
@@ -382,6 +383,11 @@ réécrite pour prétendre à la conformité ; M2–M7 et la qualification M0 re
   adresse distincte, données incomplètes, édition profil après émission, tenant/RLS.
 
 ### M2 — Cycle de numéro fiscal et dates
+
+**Statut d’implémentation : livré techniquement**, migrations additives 0014/0015,
+référence interne, compteur transactionnel privé, date serveur/fuseau et snapshot v3.
+Voir [garanties, reprise legacy et limites M2](../architecture/invoice-numbering.md).
+Les constats de l’audit restent historiques ; aucune conformité globale certifiée.
 
 - Référence brouillon séparée ; allocation atomique au commit d’émission,
   date réelle/chronologie, séries annuelles documentées et compteur rollback-safe.

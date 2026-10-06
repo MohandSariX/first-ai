@@ -4,7 +4,7 @@ import { organizations, payments, users } from "../schema/index.js";
 import { InvoiceRepository, type InvoiceScope } from "./invoices.js";
 
 type Database = ReturnType<typeof createDatabaseClient>;
-type Session = Pick<Database, "select" | "insert" | "update" | "delete">;
+type Session = Pick<Database, "select" | "insert" | "update" | "delete" | "execute">;
 export type Payment = typeof payments.$inferSelect;
 export type PaymentIdentity = { organizationId: string; userId: string; authUserId: string };
 const scoped = (s: InvoiceScope) => and(eq(payments.organizationId, s.organizationId), eq(payments.invoiceId, s.invoiceId));

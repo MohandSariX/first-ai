@@ -20,7 +20,10 @@ export function parseOperationalForm(operation: Operation, f: FormData) {
     case "invoice.classify": return invoiceClassificationSchema.parse(Object.fromEntries(Object.keys(invoiceClassificationSchema.shape).map(key => [key, formText(f, key) || null])));
     case "payment.record": return recordPaymentSchema.parse({ amount: formText(f, "amount"), method: formText(f, "method"), paidAt: formText(f, "paidAt"), reference: formText(f, "reference"), idempotencyKey: formText(f, "idempotencyKey") });
     case "payment.cancel": return cancelPaymentSchema.parse({ reason: formText(f, "reason") });
-    case "invoice.create": return createDraftInvoiceSchema.parse({ customerId: formText(f, "customerId"), issueDate: formText(f, "issueDate"), dueDate: formText(f, "dueDate"), quoteId: optional(f, "sourceQuoteId"), jobId: optional(f, "sourceJobId"), notes: optional(f, "notes"), internalNotes: optional(f, "internalNotes") });
+    case "invoice.create": {
+      if (formText(f, "issueDate") || formText(f, "issuedAt")) throw new Error("La date d’émission est attribuée par le serveur.");
+      return createDraftInvoiceSchema.parse({ customerId: formText(f, "customerId"), dueDate: formText(f, "dueDate"), quoteId: optional(f, "sourceQuoteId"), jobId: optional(f, "sourceJobId"), notes: optional(f, "notes"), internalNotes: optional(f, "internalNotes") });
+    }
     case "invoice.addItem": case "invoice.updateItem": {
       const item = { serviceId: optional(f, "serviceId") ?? null, description: formText(f, "description"), quantity: formText(f, "quantity"), unitPrice: formText(f, "unitPrice"), taxRate: formText(f, "taxRate"), sortOrder: Number(formText(f, "sortOrder") || "0") };
       return (operation === "invoice.addItem" ? addInvoiceItemSchema : updateInvoiceItemSchema).parse(item);
