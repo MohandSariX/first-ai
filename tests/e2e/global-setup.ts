@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { e2eFixture } from "./fixture";
 import { fictionalInvoiceTerms } from "../../packages/tools/src/test-invoice-mentions";
+import { createDatabaseClient } from "../../packages/database/src/client";
 
 function requireLocal(name: string): string {
   const value = process.env[name];
@@ -41,7 +42,19 @@ export default async function globalSetup() {
   if (siteFixture.error) throw new Error(siteFixture.error.message);
 
   return async () => {
-    for (const table of ["credit_notes", "payments", "invoice_items", "invoices", "approval_requests", "job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
+    // Strictly local, isolated owner session for uniquely namespaced E2E fixtures only.
+    // No runtime cleanup endpoint/GUC exception is installed by the migration.
+    requireLocal("DATABASE_URL");
+    const fixture = await admin.from("organizations").select("name").eq("id", organizationId).single();
+    if (fixture.error || fixture.data.name !== e2eFixture.organizationName) throw new Error("Refuse non-fixture cleanup");
+    const database = createDatabaseClient();
+    try {
+      await database.$client.begin(async tx => {
+        await tx.unsafe("SET LOCAL session_replication_role = replica");
+        for (const table of ["financial_audit_events", "credit_note_items", "credit_notes", "credit_note_number_counters", "payments", "invoice_items", "invoices", "invoice_number_counters"]) await tx.unsafe(`DELETE FROM public.${table} WHERE organization_id = $1::uuid`, [organizationId]);
+      });
+    } finally { await database.$client.end(); }
+    for (const table of ["approval_requests", "job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
       const cleanup = await admin.from(table).delete().eq("organization_id", organizationId);
       if (cleanup.error !== null) throw new Error(cleanup.error.message);
     }

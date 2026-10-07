@@ -513,6 +513,13 @@ Un log doit contenir :
 - résultat ;
 - métadonnées utiles.
 
+M5A implémente un journal financier ciblé append-only et des protections SQL
+documents/lignes/paiements : [architecture et frontière privilégiée](docs/architecture/financial-audit.md).
+Acteur/membership actif revérifié, audit et mutation atomiques ; lecture réservée
+aux administrateurs financiers, aucune écriture directe authenticated/service-role.
+Ce journal ne constitue pas un archivage WORM ni une certification fiscale ;
+propriétaire PostgreSQL/migrations restent une frontière privilégiée explicite.
+
 ---
 
 ## 26. Audit IA

@@ -428,6 +428,14 @@ La matrice historique n’est pas une attestation ; conformité globale non éta
 
 ### M5 — Audit, immutabilité et rétention production
 
+**M5A livré techniquement** : migrations additives 0019/0020, journal financier
+append-only et atomique, acteurs serveur, protection documents/lignes/paiements/
+suppression et consultation financière. Aucun backfill ni certification fiscale.
+Voir [couverture, contrôles et frontière privilégiée](../architecture/financial-audit.md).
+**M5B reste ouvert** : conservation/original délivré, archivage, restauration,
+privilèges administratifs et politique de rétention. La matrice historique de
+l’audit n’est pas réécrite comme attestation de conformité.
+
 - Protéger documents/items/ledger contre mutations administratives ordinaires,
   tracer issue/correction/statuts/paiements, sans chaîne de pensée ni secrets.
 - Conservation originale/snapshot/justificatifs et restauration sur la durée

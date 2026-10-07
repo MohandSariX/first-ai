@@ -2605,6 +2605,13 @@ cancelled
 
 # 83. Table audit_logs
 
+Implémentation ciblée M5A : `financial_audit_events` append-only, distinct du
+catalogue générique futur ci-dessous. Ressource/événement bornés, acteur humain
+avec FK composite tenant, corrélation et metadata minimisée ; RLS lecture
+financière, aucune écriture utilisateur. Triggers d’audit/immutabilité et contrôle
+transactionnel détaillés dans [financial-audit](docs/architecture/financial-audit.md).
+Le domaine générique `audit_logs` n’est pas créé et aucun historique n’est fabriqué.
+
 ```text
 audit_logs
 ```

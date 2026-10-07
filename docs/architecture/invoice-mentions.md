@@ -36,7 +36,8 @@ M2, calculs, identités M1, validation M3, snapshot v4 et statut émis sont atom
 Échec de configuration/date/unité : rollback, aucun numéro fiscal consommé.
 Retry d’émission conserve numéro/date/document. Triggers conservent les protections
 M2 et figent aussi `business_details` ; checks SQL protègent remises/frais.
-La défense contre toute administration privilégiée demeure un chantier M5.
+Les guards runtime et l’audit financier sont complétés par [M5A](financial-audit.md) ;
+la défense contre administration propriétaire et rétention demeurent M5B.
 
 ## Règlement et TVA
 
@@ -81,7 +82,7 @@ RBAC/RLS, anonymes et membership inactif. E2E : date/commande puis émission et 
 
 Hors portée : acomptes/prestations futures, fiscalité internationale et exceptions
 sectorielles, clauses B2G exhaustives, garanties particulières B2C, rectificatifs
-hors avoirs réductifs [M4](credit-notes.md), M5 archive/audit, M6 Unicode et M7 plateforme/e-reporting. La seule présence de
+hors avoirs réductifs [M4](credit-notes.md), M5B archivage/rétention, M6 Unicode et M7 plateforme/e-reporting. La seule présence de
 mentions ne permet pas de déclarer First AI fiscalement conforme.
 
 Références officielles vérifiées le 2026-10-06 :

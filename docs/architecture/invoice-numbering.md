@@ -71,10 +71,13 @@ bloque l’émission : réconciliation explicite, jamais antidatage ni remise à
   facture ne libère pas un numéro. Cleanup intégration supprime le tenant fictif,
   puis ses compteurs par cascade ; ce n’est pas une politique de rétention production.
 
-Ces protections ne constituent pas une piste d’audit/archivage fiscal. Une
+M5A ajoute un [journal financier et des guards runtime](financial-audit.md), notamment
+refus du DELETE émis ; les fixtures locales utilisent une session propriétaire
+isolée dans les tests, sans exception installée dans le runtime.
+Ces protections ne constituent pas une piste d’audit/archivage fiscal certifiée. Une
 administration propriétaire peut encore contourner des guards, incrémenter un
 compteur hors service, supprimer un tenant ou désactiver des triggers. M5 doit
-cadrer privilèges, conservation et mutations administratives. Aucun endpoint de
+cadrer via M5B privilèges, conservation et mutations administratives. Aucun endpoint de
 suppression de facture émise n’est ajouté.
 
 ## Migration et legacy

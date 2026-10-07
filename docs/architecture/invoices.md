@@ -87,5 +87,6 @@ bounded schemas. Local-only integration fixtures verify actual authenticated RLS
 known IDs, anonymous/service-role controls, revoked membership, tenant FKs, concurrent
 numbering/issue, rollback and source state revalidation. Playwright covers mobile manual
 draft → line edit → issue and cleans invoices before their parent resources.
-Normal tests require no Supabase/provider. Production audit, fiscal validation,
+Normal tests require no Supabase/provider. [M5A](financial-audit.md) adds transactional
+financial audit and SQL runtime immutability; certified fiscal audit, retention and fiscal validation,
 banking/reconciliation, email, exports and Billing Agent remain separate milestones.

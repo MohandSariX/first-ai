@@ -17,8 +17,10 @@ export const PERMISSIONS = [
   "jobs.read", "jobs.write", "jobs.schedule", "jobs.execute",
   "job_reports.read", "job_reports.write",
   "invoices.read", "invoices.write", "invoices.issue",
+  "invoices.metadata.write",
   "creditNotes.read", "creditNotes.write", "creditNotes.issue",
   "payments.read", "payments.write",
+  "financialAudit.read",
   "billing.seller.write", "billing.customer.write",
 ] as const;
 
@@ -29,9 +31,9 @@ export const ROLE_PERMISSIONS: Readonly<
 > = {
   OWNER: PERMISSIONS,
   ADMIN: PERMISSIONS,
-  MANAGER: PERMISSIONS.filter(p => p !== "billing.seller.write"),
+  MANAGER: PERMISSIONS.filter(p => p !== "billing.seller.write" && p !== "invoices.metadata.write"),
   TECHNICIAN: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "jobs.read", "jobs.execute", "job_reports.read", "job_reports.write"],
-  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "quotes.read", "jobs.read", "invoices.read", "invoices.write", "invoices.issue", "creditNotes.read", "creditNotes.write", "creditNotes.issue", "payments.read", "payments.write", "billing.customer.write"],
+  ACCOUNTANT: ["organizations.read", "customers.read", "contacts.read", "sites.read", "services.read", "quotes.read", "jobs.read", "invoices.read", "invoices.write", "invoices.issue", "creditNotes.read", "creditNotes.write", "creditNotes.issue", "payments.read", "payments.write", "billing.customer.write", "financialAudit.read"],
   READ_ONLY: ["organizations.read", "users.read", "customers.read", "contacts.read", "sites.read", "leads.read", "services.read", "quotes.read", "jobs.read", "job_reports.read", "invoices.read", "creditNotes.read", "payments.read"],
 };
 

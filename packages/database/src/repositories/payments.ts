@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { createDatabaseClient } from "../client.js";
 import { organizations, payments, users, creditNotes } from "../schema/index.js";
 import { InvoiceRepository, type InvoiceScope } from "./invoices.js";
+import { setFinancialActor } from "./financial-audit.js";
 
 type Database = ReturnType<typeof createDatabaseClient>;
 type Session = Pick<Database, "select" | "insert" | "update" | "delete" | "execute">;
@@ -29,7 +30,9 @@ export class PaymentSession {
     // Shared locks keep membership/organization valid until financial commit.
     const [org] = await this.db.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, i.organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).for("share");
     if (!org) return undefined;
-    return (await this.db.select({ role: users.role }).from(users).where(and(eq(users.id, i.userId), eq(users.authUserId, i.authUserId), eq(users.organizationId, i.organizationId), eq(users.status, "active"), isNull(users.deletedAt))).limit(1).for("share"))[0];
+    const member = (await this.db.select({ role: users.role }).from(users).where(and(eq(users.id, i.userId), eq(users.authUserId, i.authUserId), eq(users.organizationId, i.organizationId), eq(users.status, "active"), isNull(users.deletedAt))).limit(1).for("share"))[0];
+    if (member) await setFinancialActor(this.db, i);
+    return member;
   }
 }
 export interface PaymentStoreInterface extends Pick<PaymentSession, "payments" | "invoices"> {

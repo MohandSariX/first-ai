@@ -6,6 +6,7 @@ import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
 import { calculateInvoiceAmounts, type InvoiceCalculationItem } from "./invoice-calculation.js";
 import { createInvoiceDocumentSnapshot, invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
+import { invoiceAdministrativeMetadataSchema } from "@first-ai/schemas";
 
 export function calculateInvoiceTotals(items: readonly InvoiceCalculationItem[]) {
   if (items.length > 200) throw new OperationalConflictError("Maximum 200 lignes par facture.");
@@ -26,6 +27,14 @@ function draft(invoice: Invoice) { if (invoice.status !== "draft") throw new Ope
 
 export class InvoiceService {
   constructor(private readonly store: InvoiceStoreInterface) {}
+  async updateAdministrativeMetadata(c: CurrentBusinessUser, id: string, input: unknown) {
+    authorize(c, "invoices.metadata.write"); const parsed = invoiceAdministrativeMetadataSchema.parse(input), sc = scope(c, id);
+    return this.store.transaction(async s => {
+      const member = await s.membership(c); if (!member) throw new AuthorizationError("Adhésion inactive.");
+      authorize({ ...c, role: member.role }, "invoices.metadata.write"); found(await s.invoices.get(sc, true));
+      return found(await s.invoices.update(sc, parsed));
+    });
+  }
   async getTimezone(c: CurrentBusinessUser) { authorize(c, "invoices.read"); return this.store.timezone(c.organizationId); }
   async getInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.read"); const s = scope(c, id); return { ...found(await this.store.invoices.get(s)), items: await this.store.invoices.items(s) }; }
   async searchInvoices(c: CurrentBusinessUser, input: unknown) { authorize(c, "invoices.read"); return this.store.invoices.search({ ...searchInvoicesSchema.parse(input), organizationId: c.organizationId }); }
@@ -91,5 +100,5 @@ export class InvoiceService {
       return { snapshot, payment: { status: invoice.status, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, amountCredited: invoice.amountCredited, customerCredit: invoice.customerCredit, asOf: invoice.updatedAt.toISOString() } };
     });
   }
-  async cancelInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.write"); const sc = scope(c, id); return this.store.transaction(async s => { assertInvoiceTransition(found(await s.invoices.get(sc, true)).status, "cancelled"); return found(await s.invoices.update(sc, { status: "cancelled" })); }); }
+  async cancelInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.write"); const sc = scope(c, id); return this.store.transaction(async s => { const member = await s.membership(c); if (!member) throw new AuthorizationError("Adhésion inactive."); authorize({ ...c, role: member.role }, "invoices.write"); assertInvoiceTransition(found(await s.invoices.get(sc, true)).status, "cancelled"); return found(await s.invoices.update(sc, { status: "cancelled" })); }); }
 }

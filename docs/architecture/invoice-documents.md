@@ -37,9 +37,9 @@ exécution PUBLIC révoquée) refuse le remplacement/suppression d’un snapshot
 et la modification des données commerciales correspondantes. Il impose un
 snapshot cohérent sur les nouvelles transitions draft → issued. Les services
 refusent toute mutation de ligne après émission ; authenticated n’a aucune
-policy d’écriture directe. Les administrateurs privilégiés ne doivent pas
-éditer les lignes hors services. Suppression administrative et audit/rétention
-renforcée restent à cadrer : ce n’est pas un archivage fiscal WORM.
+policy d’écriture directe. [M5A](financial-audit.md) protège aussi les lignes,
+DELETE/soft-delete émis et historique de paiement, avec audit financier atomique.
+Administration propriétaire et rétention M5B restent à cadrer : pas d’archivage WORM.
 
 Les anciennes factures émises gardent NULL. Aucun backfill depuis le CRM actuel :
 il fabriquerait un historique. Leur PDF est indisponible ; une future correction

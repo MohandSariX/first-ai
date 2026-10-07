@@ -42,4 +42,13 @@ test("M4 partial credit note, immutable invoice, corrected debt and secure AVOIR
   await expect(page.getByRole("region", { name: "Encaissements" })).toContainText("Reste à payer : 96,00 €");
   await expect(page.getByRole("region", { name: "Encaissements" })).toContainText("Avoirs émis : 24,00 €");
   expect((await page.request.get(`/api/invoices/${invoiceId}/pdf`)).status()).toBe(200);
+  await page.goto("/settings/audit");
+  await expect(page.getByRole("heading", { name: "Audit financier", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Avoir émis", exact: true }).first()).toBeVisible();
+  await expect(page.getByText(number, { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  try {
+    await checked(admin.from("users").update({ role: "READ_ONLY" }).eq("id", owner.data.id));
+    await page.reload(); await expect(page.getByRole("heading", { name: "Accès non autorisé" })).toBeVisible();
+  } finally { await checked(admin.from("users").update({ role: "OWNER" }).eq("id", owner.data.id)); }
 });

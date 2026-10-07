@@ -69,9 +69,10 @@ mark après cleanup fictif ou suppression privilégiée : aucun numéro réutili
 Triggers SQL : identité/référence/motif immuables ; transitions d’émission vérifient
 allocation, snapshot original, bases cumulées et TVA ; lignes non éditables après
 issue/cancel ; avoir émis/cancelled non modifiable. Aucune opération applicative de
-suppression. Une administration privilégiée peut encore supprimer un document
-entier (cascade nécessaire au cleanup local), contourner les services ou désactiver
-des triggers : **M5 rétention/audit reste nécessaire**, ceci n’est pas un stockage WORM.
+suppression. [M5A](financial-audit.md) bloque désormais aussi le DELETE du parent
+émis et journalise atomiquement émission/annulation ; cleanup propriétaire réservé
+aux fixtures locales hors runtime. Le propriétaire DB peut désactiver les guards :
+**M5B rétention/privilèges reste nécessaire**, ceci n’est pas un stockage WORM.
 
 ## Paiements et solde
 

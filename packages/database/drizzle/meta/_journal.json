@@ -134,6 +134,20 @@
       "when": 1791307977656,
       "tag": "0018_panoramic_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791402790261,
+      "tag": "0019_stale_manta",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791403696535,
+      "tag": "0020_financial_audit_integrity",
+      "breakpoints": true
     }
   ]
 }

@@ -8,3 +8,4 @@ export * from "./repositories/approvals.js";
 export * from "./repositories/invoices.js";
 export * from "./repositories/payments.js";
 export * from "./repositories/credit-notes.js";
+export { FinancialAuditRepository } from "./repositories/financial-audit.js";

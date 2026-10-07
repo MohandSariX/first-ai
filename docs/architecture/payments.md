@@ -57,9 +57,10 @@ OWNER/ADMIN/MANAGER/ACCOUNTANT have payments.read/write, READ_ONLY reads and
 TECHNICIAN has no access. Service authorization remains mandatory. RLS SELECT
 requires active tenant membership and a readable parent invoice, inheriting its role
 restriction. No authenticated SQL write policy exists; anonymous reads are denied.
-Privileged administrative SQL can bypass services: do not mutate ledger or snapshots
-outside PaymentService. Database constraints do not recompute aggregate balances
-for arbitrary privileged writes; there is no fake audit/ledger trigger.
+M5A SQL guards now reject payment history rewrites/deletion and unsynchronized
+ledger commits. Receipt/cancellation and derived status events are transactional,
+with trusted active actor checks; see [financial audit](financial-audit.md).
+An owner/superuser can still disable protections: no WORM/retention claim.
 
 Existing `/invoices/[id]` provides received/remaining amounts, paginated receipt cards,
 manual entry and correction with reason. French phone-friendly forms; no new primary
@@ -74,7 +75,7 @@ Local-only integrations exercise actual Supabase RLS, UUID attacks, anonymous/ad
 controls, composite FK rejection, concurrent receipts, replay/mismatched keys, revoked
 membership/role, correction, overpayment and rollback of receipt + balance. E2E extends
 the mobile invoice flow with partial/final receipts, overpayment rejection and correction.
-Fixtures are fictional and payments are cleaned before parent invoices.
+Fixtures are fictional; local-only owner cleanup is isolated in tests, with no runtime bypass.
 
 M4 adds invoice-attached customer credit from issued corrections, not an unallocated
 receipt or refund. Existing receipt history is unchanged and receipt cancellation
@@ -82,5 +83,5 @@ recalculates the economic balance with credits. Invoice PDFs show the current da
 correction/debt/credit section separately from their immutable commercial body.
 
 No fiscal/production compliance claim, reimbursement workflow, unallocated credit,
-full audit, automated overdue transition or banking verification. Payment evidence
-and comprehensive audit/export remain future milestones.
+universal audit, automated overdue transition or banking verification. Payment evidence,
+retention/archives and comprehensive audit/export remain future milestones.

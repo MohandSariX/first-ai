@@ -9,3 +9,4 @@ export * from "./invoice-document.js";
 export * from "./billing.js";
 export * from "./invoice-mentions.js";
 export * from "./credit-notes.js";
+export { financialAuditSearchSchema, invoiceAdministrativeMetadataSchema } from "./financial-audit.js";

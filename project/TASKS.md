@@ -5,14 +5,14 @@ Travail immédiat uniquement ; direction dans [ROADMAP](ROADMAP.md), état livr�
 
 ## IN PROGRESS
 
-- Aucun jalon en cours : M4 technique terminé, sans certification fiscale.
+- Aucun jalon en cours ; M5A terminé et validé, sans certification fiscale.
 
 ## NEXT
 
 1. Valider le périmètre fiscal applicable (M0 de l’[audit](../docs/compliance/france-invoicing-audit.md)) :
    vendeur/TVA/clientèle, réception électronique déjà due et champ encaissement B2C.
-2. M5 : cadrer audit/immutabilité/rétention et conservation du document délivré, sur mission explicite.
-   M1–M4 livrés sans certification ; avoirs réductifs seulement, acomptes/exceptions non couverts.
+2. M5B : cadrer rétention et conservation du document délivré, privilèges/archives/restauration, sur mission explicite.
+   M1–M4/M5A livrés sans certification ; avoirs réductifs seulement, acomptes/exceptions non couverts.
    Ne pas activer la facturation fiscale production.
 3. Garder Director read-only et les spécialistes supervisés ; aucun élargissement
    d'autonomie, d'actions allowlistées ou d'approbateurs sans mission explicite.

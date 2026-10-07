@@ -70,7 +70,7 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Décision :** les tools valident un contrat précis et réutilisent les services
   autorisés ; les repositories gèrent la persistence. Les actions humaines réutilisent ces services.
 - **Raison :** mêmes invariants pour UI et IA, sans accès SQL/shell/HTTP arbitraire aux agents.
-- **Conséquence :** observabilité Director à la frontière tool ; audit métier humain complet différé, pas simulé.
+- **Conséquence :** observabilité Director à la frontière tool ; audit financier humain ciblé M5A (ADR-25), audit métier universel différé.
 - **Sources :** `TOOLS.md`, `packages/tools/src/crm-tools.ts`, `packages/tools/src/operational-tools.ts`.
 
 ## ADR-08 — Director v1 strictement read-only
@@ -215,7 +215,8 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Conséquences :** aucun backfill des factures historiques ; vendeur incomplet
   bloque l’émission. Adresse client absente explicitement signalée, pas substituée
   par un site. PDF français WinAnsi, refus de glyphes incompatibles. Conformité fiscale,
-  corrections/avoirs, rétention/audit et e-invoicing restent différés. Identités/adresses
+  rectificatifs complémentaires, rétention et e-invoicing restent différés ;
+  avoirs M4 et audit financier M5A étendent ce socle. Identités/adresses
   client et configuration vendeur sont désormais étendues par ADR-21, sans backfill.
 - **Sources :** `docs/architecture/invoice-documents.md`, InvoiceService, migration 0012.
 
@@ -246,7 +247,8 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   aucune reprise d’un numéro supprimé. Séries annuelles à qualifier par l’émetteur,
   historique conservé avec ses éventuels trous ; import/multi-émetteurs et antidatage
   différés. Horloge/date reculant bloque l’émission. Guards/compteur privé ne remplacent
-  ni audit ni archivage M5 ; seules transactions complètes du service appellent l’allocateur.
+  ni audit fiscal certifié ni archivage M5B ; audit runtime M5A ajouté par ADR-25.
+  Seules transactions complètes du service appellent l’allocateur.
 - **Sources :** `docs/architecture/invoice-numbering.md`, InvoiceService/InvoiceRepository,
   migrations 0014/0015, audit §5/M2 et BOFiP §§70–140.
 
@@ -274,6 +276,23 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   dette corrigée, argent déclaré reçu et crédit client sans simuler un remboursement.
 - **Conséquences :** pas de quantités retournées inventées, de facture de remplacement
   ni de réallocation crédit inter-factures. Original/snapshot v1–v4 inchangés ; avoir v1.
-  Les avoirs émis/lignes sont protégés SQL ; suppression administrative/archivage
-  et audit complet restent M5. Aucun outil/action IA financier ajouté.
+  Les avoirs émis/lignes sont protégés SQL ; M5A complète suppression/audit financier,
+  archivage et garanties contre administration propriétaire restent M5B. Aucun outil/action IA financier ajouté.
 - **Sources :** `docs/architecture/credit-notes.md`, migrations 0017/0018, audit M4.
+
+## ADR-25 — Audit financier atomique et guards runtime, sans faux archivage
+
+- **Statut :** adopté, implémenté M5A ; conformité fiscale globale non établie.
+- **Décision :** journal financier append-only borné, événements de mutation par
+  triggers dans la même transaction, configuration par service/repository ; acteur
+  transaction-local issu du contexte serveur et membership actif revérifié en SQL.
+  Contenu fiscal/lignes/numéros/dates émis figés, paiement corrigé par annulation
+  explicite, soldes revalidés au commit ; notes internes administratives OWNER/ADMIN auditées.
+- **Raison :** éviter mutations silencieuses et événements de succès orphelins,
+  conserver originaux et historique sans dupliquer profils ou secrets.
+- **Conséquences :** couverture à partir du déploiement seulement, sans backfill.
+  RLS/consultation réservée aux rôles financiers hors READ_ONLY/TECHNICIAN.
+  Aucun bypass runtime ; cleanup propriétaire strictement local et fixture-scopé
+  dans les tests. Propriétaire DB peut encore désactiver les protections : M5B
+  doit cadrer privilèges/rétention/archive, pas de promesse WORM ni audit fiscal certifié.
+- **Sources :** `docs/architecture/financial-audit.md`, migrations 0019/0020.

@@ -4,6 +4,7 @@ import type { CreateDraftInvoiceInput, SellerBillingInput, CustomerBillingInput,
 import type { createDatabaseClient } from "../client.js";
 import { customers, invoices, invoiceItems, organizations, users } from "../schema/index.js";
 import { RepositorySession } from "./operations.js";
+import { FinancialAuditRepository, setFinancialActor } from "./financial-audit.js";
 
 type Database = ReturnType<typeof createDatabaseClient>;
 type Session = Pick<Database, "select" | "insert" | "update" | "delete" | "execute">;
@@ -37,7 +38,7 @@ export class InvoiceRepository {
     const allocation = row(result[0]);
     return { invoiceNumber: allocation.number, issueDate: allocation.issue_date, issuedAt: new Date(allocation.issued_at), timeZone: allocation.time_zone, fiscalYear: allocation.fiscal_year };
   }
-  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "invoiceNumber" | "issueDate" | "status" | "issuedAt" | "subtotal" | "taxAmount" | "total" | "amountPaid" | "amountDue" | "amountCredited" | "customerCredit" | "paidAt" | "documentSnapshot" | "businessDetails">> & Partial<InvoiceClassification>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
+  async update(s: InvoiceScope, input: Partial<Pick<Invoice, "invoiceNumber" | "issueDate" | "status" | "issuedAt" | "subtotal" | "taxAmount" | "total" | "amountPaid" | "amountDue" | "amountCredited" | "customerCredit" | "paidAt" | "documentSnapshot" | "businessDetails" | "internalNotes">> & Partial<InvoiceClassification>) { return (await this.db.update(invoices).set({ ...input, updatedAt: new Date() }).where(where(s)).returning())[0]; }
   async items(s: InvoiceScope) { return this.db.select().from(invoiceItems).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId))).orderBy(invoiceItems.sortOrder, invoiceItems.createdAt, invoiceItems.id).limit(201); }
   async addItem(s: InvoiceScope, input: Omit<typeof invoiceItems.$inferInsert, "id" | "organizationId" | "invoiceId" | "createdAt" | "updatedAt">) { return row((await this.db.insert(invoiceItems).values({ ...input, ...s }).returning())[0]); }
   async updateItem(s: InvoiceScope, itemId: string, input: Partial<Pick<InvoiceItem, "serviceId" | "description" | "quantity" | "unitPrice" | "taxRate" | "sortOrder" | "unit" | "kind" | "discountAmount">>) { return (await this.db.update(invoiceItems).set({ ...input, updatedAt: new Date() }).where(and(eq(invoiceItems.organizationId, s.organizationId), eq(invoiceItems.invoiceId, s.invoiceId), eq(invoiceItems.id, itemId))).returning())[0]; }
@@ -46,11 +47,14 @@ export class InvoiceRepository {
 
 export class InvoiceSession extends RepositorySession {
   readonly invoices: InvoiceRepository;
-  constructor(private readonly invoiceDb: Session, transactional = false) { super(invoiceDb, transactional); this.invoices = new InvoiceRepository(invoiceDb, transactional); }
+  readonly financialAudit: FinancialAuditRepository;
+  constructor(private readonly invoiceDb: Session, transactional = false) { super(invoiceDb, transactional); this.invoices = new InvoiceRepository(invoiceDb, transactional); this.financialAudit = new FinancialAuditRepository(invoiceDb); }
   async membership(i: { organizationId: string; userId: string; authUserId: string }) {
     const [org] = await this.invoiceDb.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, i.organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).for("share");
     if (!org) return undefined;
-    return (await this.invoiceDb.select({ role: users.role }).from(users).where(and(eq(users.id, i.userId), eq(users.authUserId, i.authUserId), eq(users.organizationId, i.organizationId), eq(users.status, "active"), isNull(users.deletedAt))).limit(1).for("share"))[0];
+    const member = (await this.invoiceDb.select({ role: users.role }).from(users).where(and(eq(users.id, i.userId), eq(users.authUserId, i.authUserId), eq(users.organizationId, i.organizationId), eq(users.status, "active"), isNull(users.deletedAt))).limit(1).for("share"))[0];
+    if (member) await setFinancialActor(this.invoiceDb, i);
+    return member;
   }
   async billingIdentity(s: InvoiceScope, customerId: string) {
     // Shared locks freeze both identities until issue commit; never use a service-site address.
