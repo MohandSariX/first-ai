@@ -45,10 +45,19 @@ test("M4 partial credit note, immutable invoice, corrected debt and secure AVOIR
   await page.goto("/settings/audit");
   await expect(page.getByRole("heading", { name: "Audit financier", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Avoir émis", exact: true }).first()).toBeVisible();
-  await expect(page.getByText(number, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Avoir émis", exact: true }).locator("..")).toContainText(number);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   try {
     await checked(admin.from("users").update({ role: "READ_ONLY" }).eq("id", owner.data.id));
     await page.reload(); await expect(page.getByRole("heading", { name: "Accès non autorisé" })).toBeVisible();
   } finally { await checked(admin.from("users").update({ role: "OWNER" }).eq("id", owner.data.id)); }
+  await page.goto("/settings/retention");
+  await page.getByLabel("Émissions depuis").fill("2026-01-01"); await page.getByLabel("Émissions jusqu’au").fill("2026-12-31");
+  await page.getByRole("button", { name: "Créer l’export", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Opération réussie.");
+  const archiveUrl = await page.getByRole("link", { name: "Télécharger le dernier export" }).getAttribute("href");
+  const archive = await page.request.get(archiveUrl!); expect(archive.status()).toBe(200);
+  const bundle = await archive.json(); expect(bundle.manifest.version).toBe(1); expect(bundle.manifest.files.some((f: { name: string }) => f.name === `documents/${id}.pdf`)).toBe(true);
+  await page.getByRole("button", { name: "Vérifier l’archive" }).click();
+  await expect(page.getByRole("status")).toHaveText("Archive vérifiée : fichiers et empreintes cohérents.");
 });

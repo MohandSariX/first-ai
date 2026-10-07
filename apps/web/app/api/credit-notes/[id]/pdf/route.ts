@@ -1,6 +1,7 @@
 import "server-only";
 import { createDatabaseClient, CreditNoteStore } from "@first-ai/database";
-import { CreditNoteService, AuthorizationError, ResourceNotFoundError, OperationalConflictError } from "@first-ai/tools";
+import { CreditNoteService, FinancialRetentionService, AuthorizationError, ResourceNotFoundError, OperationalConflictError } from "@first-ai/tools";
+import { InvoiceStore } from "@first-ai/database";
 import { generateCreditNotePdf } from "@first-ai/tools/credit-note-pdf";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,8 +17,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const db = createDatabaseClient();
   try {
     const snapshot = await new CreditNoteService(new CreditNoteStore(db)).getDocument(user, id);
-    const bytes = await generateCreditNotePdf(snapshot);
-    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${snapshot.number}.pdf"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+    const original = await new FinancialRetentionService(new InvoiceStore(db)).original(user, "credit_note", id);
+    const bytes = original?.bytes ?? await generateCreditNotePdf(snapshot);
+    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${snapshot.number}${original ? "" : "-reconstitue"}.pdf"`, "X-First-AI-Document": original ? "original-issued" : "reconstructed-legacy-copy", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (e) {
     if (e instanceof AuthorizationError) return error("FORBIDDEN", "Votre rôle ne permet pas de consulter les avoirs.", 403);
     if (e instanceof ResourceNotFoundError) return error("NOT_FOUND", "Avoir introuvable.", 404);

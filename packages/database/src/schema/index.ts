@@ -23,3 +23,4 @@ export * from "./payments.js";
 export * from "./billing-enums.js";
 export * from "./credit-notes.js";
 export * from "./financial-audit.js";
+export * from "./financial-retention.js";

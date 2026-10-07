@@ -11,7 +11,7 @@ export const financialAuditEvents = pgTable("financial_audit_events", {
   metadata: jsonb("metadata").$type<Record<string, string | string[] | null>>().notNull(), occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   foreignKey({ name: "financial_audit_actor_org_fk", columns: [t.actorUserId, t.organizationId], foreignColumns: [users.id, users.organizationId] }),
-  check("financial_audit_event_check", sql`${t.eventType} in ('invoice.issued','invoice.cancelled','invoice.status_changed','invoice.metadata_changed','credit_note.issued','credit_note.cancelled','payment.recorded','payment.cancelled','billing.seller_changed','billing.customer_changed','billing.terms_changed')`),
+  check("financial_audit_event_check", sql`${t.eventType} in ('invoice.issued','invoice.cancelled','invoice.status_changed','invoice.metadata_changed','credit_note.issued','credit_note.cancelled','payment.recorded','payment.cancelled','billing.seller_changed','billing.customer_changed','billing.terms_changed','invoice.artifact_persisted','credit_note.artifact_persisted','billing.retention_changed','billing.archive_exported','billing.archive_verified')`),
   check("financial_audit_entity_check", sql`${t.entityType} in ('invoice','credit_note','payment','organization','customer') and ${t.actorType} = 'user'`),
   check("financial_audit_metadata_check", sql`jsonb_typeof(${t.metadata}) = 'object' and octet_length(${t.metadata}::text) <= 2048`),
   index("financial_audit_org_time_idx").on(t.organizationId, t.occurredAt, t.id),

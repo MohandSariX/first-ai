@@ -72,7 +72,8 @@ issue/cancel ; avoir émis/cancelled non modifiable. Aucune opération applicati
 suppression. [M5A](financial-audit.md) bloque désormais aussi le DELETE du parent
 émis et journalise atomiquement émission/annulation ; cleanup propriétaire réservé
 aux fixtures locales hors runtime. Le propriétaire DB peut désactiver les guards :
-**M5B rétention/privilèges reste nécessaire**, ceci n’est pas un stockage WORM.
+[M5B](financial-retention.md) ajoute originaux/conservation/export locaux ; les
+privilèges et sauvegardes de production restent à qualifier, sans stockage WORM.
 
 ## Paiements et solde
 

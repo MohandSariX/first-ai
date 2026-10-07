@@ -432,9 +432,12 @@ La matrice historique n’est pas une attestation ; conformité globale non éta
 append-only et atomique, acteurs serveur, protection documents/lignes/paiements/
 suppression et consultation financière. Aucun backfill ni certification fiscale.
 Voir [couverture, contrôles et frontière privilégiée](../architecture/financial-audit.md).
-**M5B reste ouvert** : conservation/original délivré, archivage, restauration,
-privilèges administratifs et politique de rétention. La matrice historique de
-l’audit n’est pas réécrite comme attestation de conformité.
+**M5B livré techniquement** : migration additive 0021, politique annuelle explicite,
+échéances depuis clôture, originaux PDF immuables/hachés, storage local contrôlé,
+exports bornés et vérification offline sans restore. Pas de faux original legacy.
+Voir [fondation et limites production](../architecture/financial-retention.md).
+Stockage durable, backups/restore réels, exercices atypiques et contrôle administratif
+restent à qualifier. La matrice historique n’est pas réécrite comme attestation de conformité.
 
 - Protéger documents/items/ledger contre mutations administratives ordinaires,
   tracer issue/correction/statuts/paiements, sans chaîne de pensée ni secrets.

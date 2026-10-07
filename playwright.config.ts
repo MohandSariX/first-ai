@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 
 process.env.E2E_TEST_RUN_ID ??= randomUUID();
+process.env.E2E_FINANCIAL_STORAGE_DIRECTORY ??= mkdtempSync(join(tmpdir(), "first-ai-financial-e2e-"));
+process.env.FINANCIAL_STORAGE_DIRECTORY = process.env.E2E_FINANCIAL_STORAGE_DIRECTORY;
 const port = Number(process.env.E2E_PORT ?? 3100);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("E2E_PORT must be a valid local port.");
 

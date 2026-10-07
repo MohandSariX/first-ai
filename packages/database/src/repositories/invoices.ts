@@ -5,6 +5,7 @@ import type { createDatabaseClient } from "../client.js";
 import { customers, invoices, invoiceItems, organizations, users } from "../schema/index.js";
 import { RepositorySession } from "./operations.js";
 import { FinancialAuditRepository, setFinancialActor } from "./financial-audit.js";
+import { FinancialRetentionRepository } from "./financial-retention.js";
 
 type Database = ReturnType<typeof createDatabaseClient>;
 type Session = Pick<Database, "select" | "insert" | "update" | "delete" | "execute">;
@@ -48,7 +49,8 @@ export class InvoiceRepository {
 export class InvoiceSession extends RepositorySession {
   readonly invoices: InvoiceRepository;
   readonly financialAudit: FinancialAuditRepository;
-  constructor(private readonly invoiceDb: Session, transactional = false) { super(invoiceDb, transactional); this.invoices = new InvoiceRepository(invoiceDb, transactional); this.financialAudit = new FinancialAuditRepository(invoiceDb); }
+  readonly retention: FinancialRetentionRepository;
+  constructor(private readonly invoiceDb: Session, transactional = false) { super(invoiceDb, transactional); this.invoices = new InvoiceRepository(invoiceDb, transactional); this.financialAudit = new FinancialAuditRepository(invoiceDb); this.retention = new FinancialRetentionRepository(invoiceDb); }
   async membership(i: { organizationId: string; userId: string; authUserId: string }) {
     const [org] = await this.invoiceDb.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, i.organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).for("share");
     if (!org) return undefined;

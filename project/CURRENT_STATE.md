@@ -50,7 +50,7 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 
 ## Base actuelle
 
-24 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
+27 tables applicatives `public` (hors tables internes Supabase et suivi Drizzle) :
 
 - Identité/CRM : `organizations`, `users`, `customers`, `contacts`, `customer_sites`,
   `leads`, `services`.
@@ -58,9 +58,10 @@ et `docs/`. Remplacer les informations obsolètes après chaque jalon.
 - Facturation : `invoices`, `invoice_items`, `payments`, `credit_notes`, `credit_note_items`,
   `invoice_number_counters` et `credit_note_number_counters` (privées).
 - Audit ciblé : `financial_audit_events` append-only.
+- Conservation : `financial_retention_policies`, `financial_artifacts`, `financial_archive_exports`.
 - IA : `agents`, `agent_runs`, `agent_tool_calls`, `ai_settings`, `approval_requests`.
 
-Vingt-et-une migrations 0000–0020 dans `packages/database/drizzle/`, seule source de migration
+Vingt-deux migrations 0000–0021 dans `packages/database/drizzle/`, seule source de migration
 applicative. M2 : `0014_strange_enchantress.sql` ajoute référence interne et compteur
 transactionnel, nullable numéro/date avant issue et protections SQL ;
 `0015_fix_invoice_allocator_conflict.sql` corrige la cible ON CONFLICT sans réécrire
@@ -72,6 +73,8 @@ protections SQL de numérotation, émission et immutabilité des avoirs.
 M5A `0019_stale_manta.sql` ajoute le journal financier et les guards runtime ;
 `0020_financial_audit_integrity.sql` vérifie ressource tenant et ledger/solde au commit,
 sans modifier 0019 déjà appliquée. Audit sans backfill historique.
+M5B `0021_silly_deadpool.sql` ajoute politique explicite de clôture/conservation,
+artefacts originaux et exports immuables, guards SQL/RLS et atomicité émission/original.
 Snapshot v4 obligatoire aux nouvelles émissions ; identités
 et classification M1 conservées. Aucun backfill des snapshots historiques.
 Les anciennes migrations restent inchangées. Appliquées au Supabase local,
@@ -128,9 +131,10 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   identité/adresse client dédiée dans sa fiche (rôles invoices.write autorisés),
   classification B2B/B2C/B2G, services/goods/mixed et traitement TVA dans le brouillon.
   Émission domestique FR seulement, données applicables requises selon scénario ;
-  pas d’inférence secteur/site/TVA ni identifiant inventé. PDFKit serveur génère à la demande
-  un vrai PDF français, indépendant du CRM live, avec encart d’encaissements actualisé
-  déclaratif/non vérifié par banque. Pas de stockage PDF ni IA. Download authentifié,
+  pas d’inférence secteur/site/TVA ni identifiant inventé. PDFKit serveur génère
+  l’original à l’émission depuis le snapshot, conservé sans encart dynamique ;
+  une copie à la demande peut afficher les encaissements actuels déclaratifs/non vérifiés
+  par banque. Stockage fichier contrôlé hors PostgreSQL, aucune IA. Download authentifié,
   membership/rôle courants revérifiés ; READ_ONLY autorisé, TECHNICIAN refusé.
   `docs/architecture/invoice-documents.md` décrit les limites fiscales explicites.
   [M1 identités/classification](../docs/architecture/billing-identities.md) détaille
@@ -162,7 +166,18 @@ Auth/CRM, non intégralement représentée dans les déclarations Drizzle.
   Notes internes seules modifiables par OWNER/ADMIN via service et audit.
   Consultation `financialAudit.read` OWNER/ADMIN/MANAGER/ACCOUNTANT, autres refusés.
   [Périmètre et limite propriétaire DB](../docs/architecture/financial-audit.md) :
-  pas de WORM, d’archivage M5B ni de conformité fiscale certifiée.
+  pas de WORM ni de conformité fiscale certifiée.
+- M5B : clôture comptable annuelle explicitement configurée et versionnée, minimum
+  dix ans depuis cette clôture ; échéances inconnues si configuration absente,
+  sans backfill. Original PDF facture/avoir SHA-256, metadata immuable et guards
+  de commit dans la transaction d’émission. Storage serveur local remplaçable,
+  sans delete/overwrite ; suppression interdite même après échéance, aucune purge.
+  `/settings/retention` et `/api/financial-archives` : export JSON v1 borné,
+  manifest/PDF/snapshots/paiements/audit/compteurs scopés et vérification offline
+  sans restauration. OWNER/ADMIN configuration, ACCOUNTANT export, MANAGER lecture.
+  READ_ONLY peut télécharger les originaux, pas administrer les archives.
+  Documents historiques sans artefact clairement reconstitués, jamais faux originaux.
+  [Conservation M5B et limites production](../docs/architecture/financial-retention.md).
 
 ## Director et IA hybride
 
@@ -221,6 +236,8 @@ Corrections : `/credit-notes`, `/credit-notes/[id]`, menu secondaire ;
 `/settings/billing` : configuration vendeur, rôle de facturation requis pour lecture.
 `/settings/audit` : timeline financière paginée en lecture seule, liens tenant-scopés,
 acteur UUID abrégé et métadonnées minimisées, sans edit/delete.
+`/settings/retention` : politique explicite et export/vérification bornés ;
+`/api/financial-archives` : frontière serveur autorisée, aucune URL publique.
 `GET /api/invoices/[id]/pdf` : invoices.read, lookup tenant, active membership,
 PDF attachment/no-store ; aucun document public ni preview brouillon.
 `/` redirige vers dashboard ; `/login` et `GET /api/health` sont publics.
@@ -266,14 +283,15 @@ journal financier ciblé M5A disponible, couverture à partir de son déploiemen
   Factures historiques sans snapshot non téléchargeables, sans backfill inventé.
   Polices PDF WinAnsi/français ; glyphes non supportés refusés explicitement.
   Snapshot/corps/lignes/suppressions protégés SQL, journal financier atomique M5A ;
-  pas de WORM ni rétention/audit fiscal complet contre administration propriétaire.
-  Pas d’email/export ou Billing Agent ; avoirs réductifs seulement, rectificatifs
+  pas de WORM ni audit fiscal complet contre administration propriétaire.
+  Export financier borné livré ; pas d’email/export comptable ou Billing Agent ; avoirs réductifs seulement, rectificatifs
   de remplacement/majoration et cardinalité de facturation partielle à cadrer.
-  Audit fiscal français documentaire terminé au 2026-10-05 ; M1–M4/M5A implémentés,
+  Audit fiscal français documentaire terminé au 2026-10-05 ; M1–M4/M5A/M5B implémentés,
   conformité non établie. Numéro/date à l’émission protégés dans le workflow serveur,
   mais historique non renuméroté et séries/émetteurs à qualifier. Acomptes, exceptions
   sectorielles/internationales, clauses publiques et cas particuliers non couverts ;
-  validation des scénarios de correction et conservation originale restent nécessaires.
+  qualification des exercices atypiques, scénarios de correction et stockage/backup
+  durables de production restent nécessaires. Le hash n’est pas une archive probante.
   Aucune plateforme de réception/émission ni e-reporting ; qualification fiscale
   de l’émetteur et du suivi encaissement B2C requise avant production.
   Voir [audit et spécification](../docs/compliance/france-invoicing-audit.md).
@@ -300,27 +318,29 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation M5A au 2026-10-07 : lint, typecheck,
-212 tests unitaires, 91 intégrations locales, build et 8 E2E passent.
-Migrations 0019/0020 appliquées localement, chacune avec second passage sûr via tracking ;
-0000–0018 inchangées. Tests M1–M4 conservés ; M4 couvre TVA cumulative/multi-taux,
+`supabase:start/stop/status`. Validation M5B au 2026-10-07 : lint, typecheck,
+219 tests unitaires, 96 intégrations locales, build et 8 E2E passent.
+Migration 0021 appliquée localement avec second passage sûr via tracking ;
+0000–0020 inchangées. Tests M1–M4 conservés ; M4 couvre TVA cumulative/multi-taux,
 paiements/crédit/dette, sur-correction concurrente, émission/retry/rollback du compteur,
 immutabilité SQL et original inchangé, FK/RLS/UUID, révocation rôle/membership.
 PDF AVOIR réel vérifié en texte et visuellement : AV/date, FAC/date originale,
 identités, motif, TVA par taux et montants à déduire. PDF facture : corps original
-avec encart courant d’avoirs/solde/crédit. V1/v2/v3/v4 restent lisibles, inchangés.
-Premier passage E2E M5A : 7/8, attente expirée sur l’enregistrement d’un devis ;
-relance complète 8/8 réussie, sans réduire les assertions ni augmenter les délais.
+désormais préservé sans solde dynamique, copie actualisée distincte.
+V1/v2/v3/v4 restent lisibles, inchangés.
 M5A couvre refus SQL, append-only, ressources tenant/UUID, acteurs frais,
 rollback des vrais événements/mutations, solde différé et notes administratives.
 Cleanup financier dans les tests uniquement : URLs locales + tenant fictif possédé
 vérifiés, session propriétaire isolée, aucune exception runtime installée.
-Aucun provider IA exécuté pour M5A.
+Aucun provider IA exécuté pour M5B.
+PDF original réellement rendu et vérifié visuellement : numéro/date/TVA multi-taux/
+total intacts, aucun encart dynamique. Contrôle d’origine HTTP existant réutilisé.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
-Prochain jalon technique : **M5B, rétention/original délivré et garanties production**.
+Prochain jalon technique : **M6, PDF Unicode**, sans prétendre résoudre les garanties
+de stockage/backup/restore de production restantes.
 Qualification M0 de l’émetteur/flux et obligations déjà applicables reste nécessaire ;
 M1–M4 ne la réalisent pas automatiquement. Rectificatifs complémentaires, rétention/Unicode
 et intégration électronique restent des jalons distincts, selon priorité applicable.

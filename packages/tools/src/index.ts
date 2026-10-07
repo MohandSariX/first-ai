@@ -12,3 +12,5 @@ export * from "./invoice-document.js";
 export * from "./billing-service.js";
 export * from "./credit-note-service.js";
 export { FinancialAuditService } from "./financial-audit-service.js";
+export { FinancialRetentionService } from "./financial-retention-service.js";
+export { verifyFinancialArchive } from "./financial-archive.js";

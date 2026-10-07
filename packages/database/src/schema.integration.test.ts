@@ -16,7 +16,10 @@ const expectedTables = [
   "credit_notes",
   "customer_sites",
   "customers",
+  "financial_archive_exports",
+  "financial_artifacts",
   "financial_audit_events",
+  "financial_retention_policies",
   "invoice_items",
   "invoice_number_counters",
   "invoices",
@@ -172,7 +175,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 21 }]);
+    expect(result).toEqual([{ migrationCount: 22 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

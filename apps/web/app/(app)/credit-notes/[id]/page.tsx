@@ -11,7 +11,7 @@ export const metadata = { title: "Détail avoir" };
 export default async function CreditNotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; if (!z.uuid().safeParse(id).success) notFound();
   let data;
-  try { data = await withCrm(async c => ({ note: await c.creditNotes.getCreditNote(c.context, id), write: hasPermission(c.context.role, "creditNotes.write"), issue: hasPermission(c.context.role, "creditNotes.issue") })); }
+  try { data = await withCrm(async c => ({ note: await c.creditNotes.getCreditNote(c.context, id), artifact: await c.retention.artifactStatus(c.context, "credit_note", id), write: hasPermission(c.context.role, "creditNotes.write"), issue: hasPermission(c.context.role, "creditNotes.issue") })); }
   catch (e) { if (e instanceof ResourceNotFoundError) notFound(); if (e instanceof AuthorizationError) return <EmptyState title="Accès non autorisé" description="Votre rôle ne permet pas de consulter les avoirs."/>; throw e; }
   const n = data.note, editable = n.status === "draft" && data.write, hidden = { creditNoteId: id, invoiceId: n.originalInvoiceId };
   return <div className="space-y-6 break-words"><div className="break-all"><PageHeader title={n.number ?? `BROUILLON-${n.id}`} description={n.issueDate ? `Date d’émission : ${n.issueDate}` : "Numéro AV attribué uniquement à l’émission"}/></div>
@@ -24,7 +24,7 @@ export default async function CreditNotePage({ params }: { params: Promise<{ id:
     <section aria-label="Totaux de l’avoir" className="rounded-2xl border bg-white p-5"><h2 className="font-semibold">Montants à déduire</h2><p>HT : {formatMoney(n.subtotal)}</p><p>TVA : {formatMoney(n.taxAmount)}</p><p className="font-semibold">TTC : {formatMoney(n.total)}</p></section>
     {data.issue && n.status === "draft" ? <OperationalForm operation="credit.issue" hidden={hidden} submit="Émettre l’avoir" fields={[{ name: "confirmed", label: "Je confirme l’émission : numéro définitif et correction figée, aucun remboursement", type: "checkbox", required: true }]}/> : null}
     {editable ? <OperationalForm operation="credit.cancel" hidden={hidden} submit="Annuler le brouillon d’avoir"/> : null}
-    {n.status === "issued" ? <a className="inline-flex rounded-xl bg-neutral-900 px-4 py-3 text-sm text-white" href={`/api/credit-notes/${id}/pdf`}>Télécharger le PDF de l’avoir</a> : null}
+    {n.status === "issued" ? <div><a className="inline-flex rounded-xl bg-neutral-900 px-4 py-3 text-sm text-white" href={`/api/credit-notes/${id}/pdf`}>Télécharger le PDF de l’avoir</a><p className="mt-2 text-sm">{data.artifact.originalPreserved ? "Original émis conservé." : "Document historique : original non conservé à l’émission, copie reconstituée."}</p></div> : null}
     <p className="text-xs text-neutral-500">Les bases disponibles sont revérifiées à l’émission. Un autre avoir peut rendre ce brouillon périmé. L’original reste inchangé. Fondation technique : conformité fiscale non validée.</p>
   </div>;
 }

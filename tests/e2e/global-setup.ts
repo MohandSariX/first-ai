@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { e2eFixture } from "./fixture";
 import { fictionalInvoiceTerms } from "../../packages/tools/src/test-invoice-mentions";
 import { createDatabaseClient } from "../../packages/database/src/client";
+import { InvoiceStore } from "../../packages/database/src/repositories/invoices";
+import { FinancialRetentionService } from "../../packages/tools/src/financial-retention-service";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 function requireLocal(name: string): string {
   const value = process.env[name];
@@ -29,6 +34,9 @@ export default async function globalSetup() {
   if (termsResult.error) throw termsResult.error;
   const userResult = await admin.from("users").insert({ id: businessUserId, organization_id: organizationId, auth_user_id: authUserId, first_name: "Utilisateur", last_name: "E2E", email: e2eFixture.email, role: "OWNER" });
   if (userResult.error !== null) throw new Error(userResult.error.message);
+  const policyDatabase = createDatabaseClient();
+  try { await new FinancialRetentionService(new InvoiceStore(policyDatabase)).configure({ authUserId, userId: businessUserId, organizationId, role: "OWNER" }, { closingMonth: 12, closingDay: 31, retentionYears: 10 }); }
+  finally { await policyDatabase.$client.end(); }
   // Keep deterministic E2E off both live AI providers. Missing-key checks use cloud-only.
   const settingsResult = await admin.from("ai_settings").insert({ organization_id: organizationId, mode: "CLOUD_ONLY" });
   if (settingsResult.error !== null) throw new Error(settingsResult.error.message);
@@ -51,7 +59,7 @@ export default async function globalSetup() {
     try {
       await database.$client.begin(async tx => {
         await tx.unsafe("SET LOCAL session_replication_role = replica");
-        for (const table of ["financial_audit_events", "credit_note_items", "credit_notes", "credit_note_number_counters", "payments", "invoice_items", "invoices", "invoice_number_counters"]) await tx.unsafe(`DELETE FROM public.${table} WHERE organization_id = $1::uuid`, [organizationId]);
+        for (const table of ["financial_artifacts", "financial_archive_exports", "financial_retention_policies", "financial_audit_events", "credit_note_items", "credit_notes", "credit_note_number_counters", "payments", "invoice_items", "invoices", "invoice_number_counters"]) await tx.unsafe(`DELETE FROM public.${table} WHERE organization_id = $1::uuid`, [organizationId]);
       });
     } finally { await database.$client.end(); }
     for (const table of ["approval_requests", "job_reports", "jobs", "quote_items", "quotes", "agent_tool_calls", "agent_runs", "agents", "ai_settings", "customer_sites", "contacts", "services"]) {
@@ -66,5 +74,8 @@ export default async function globalSetup() {
     if (organizationCleanup.error !== null) throw new Error(organizationCleanup.error.message);
     const authCleanup = await admin.auth.admin.deleteUser(authUserId);
     if (authCleanup.error !== null) throw new Error(authCleanup.error.message);
+    const storage = process.env.E2E_FINANCIAL_STORAGE_DIRECTORY;
+    if (!storage?.startsWith(join(tmpdir(), "first-ai-financial-e2e-"))) throw new Error("Refuse non-test storage cleanup");
+    await rm(storage, { recursive: true, force: true });
   };
 }

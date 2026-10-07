@@ -39,7 +39,8 @@ snapshot cohérent sur les nouvelles transitions draft → issued. Les services
 refusent toute mutation de ligne après émission ; authenticated n’a aucune
 policy d’écriture directe. [M5A](financial-audit.md) protège aussi les lignes,
 DELETE/soft-delete émis et historique de paiement, avec audit financier atomique.
-Administration propriétaire et rétention M5B restent à cadrer : pas d’archivage WORM.
+M5B fournit rétention/original/export locaux ; administration propriétaire et
+garanties durables de production restent à cadrer : pas d’archivage WORM.
 
 Les anciennes factures émises gardent NULL. Aucun backfill depuis le CRM actuel :
 il fabriquerait un historique. Leur PDF est indisponible ; une future correction
@@ -65,9 +66,11 @@ Les modifications de profils après émission n’altèrent pas les snapshots.
 `@first-ai/tools/invoice-pdf` utilise PDFKit 0.20.2 et les polices locales Helvetica.
 Entrée Node séparée du registre d’outils ; PDFKit externalisé par Next pour ses
 métriques locales. Aucun chemin filesystem fourni par utilisateur, HTML, réseau
-ou IA. Génération à la demande sans bytes PostgreSQL, Storage ni cache.
-Metadata de création = capture du snapshot ; dernière modification de l’encart
-paiement = invoice.updatedAt. Mêmes données → mêmes bytes.
+ou IA. Depuis [M5B](financial-retention.md), original généré à l’émission et conservé
+dans un stockage local serveur contrôlé, hors PostgreSQL. Download original par défaut ;
+copie avec situation de paiement actuelle explicitement séparée (`?copy=current`).
+Les copies legacy restent reconstituées, sans faux original. Metadata de l’original =
+capture du snapshot ; dernière modification de la copie dynamique = invoice.updatedAt.
 
 HT/TVA/TTC et ventilation par taux viennent du snapshot, avec arrondis au centime
 par ligne identiques à la facture. Format EUR par chaînes, sans arithmétique
@@ -106,6 +109,7 @@ organisation refusé. Fixtures fictives nettoyées ; vérification visuelle sép
 
 L’audit français est terminé ; M1 livre les identités/adresses et M2 le cycle
 numéro/date, sans certification globale. M3 livre des mentions/dates domestiques ordinaires ; restent ses exceptions,
-rectificatifs de remplacement/majoration, rétention/audit M5, Unicode M6 et intégration électronique M7.
+rectificatifs de remplacement/majoration, garanties de stockage/audit de production
+au-delà du socle M5A/M5B, Unicode M6 et intégration électronique M7.
 Qualification des flux, séries et obligations applicables reste nécessaire avant
 production. Ce PDF technique ne prétend pas satisfaire toutes ces exigences.

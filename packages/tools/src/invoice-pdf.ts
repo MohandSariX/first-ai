@@ -14,7 +14,7 @@ function date(value: string) { const [year, month, day] = value.slice(0, 10).spl
 function displayDecimal(value: string) { return value.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1").replace(".", ","); }
 const paymentLabels = { draft: "Brouillon", issued: "Non réglée", sent: "Non réglée", partially_paid: "Partiellement réglée", paid: "Réglée", overdue: "En retard", cancelled: "Annulée", written_off: "Passée en perte" };
 
-export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buffer> {
+export async function generateInvoicePdf(view: InvoiceDocumentView, options: { original?: boolean } = {}): Promise<Buffer> {
   const snapshot = invoiceDocumentSnapshotSchema.parse(view.snapshot);
   const available = invoiceDocumentAvailability(snapshot);
   if (!available.available) throw new OperationalConflictError(available.message ?? "Document indisponible.");
@@ -26,7 +26,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
   };
   const doc = new PDFDocument({ size: "A4", margin: 42, bufferPages: true, compress: true,
     info: { Title: `FACTURE ${snapshot.invoice.number}`, Author: snapshot.seller.legalName || snapshot.seller.name,
-      CreationDate: new Date(snapshot.capturedAt), ModDate: new Date(view.payment.asOf) } });
+      CreationDate: new Date(snapshot.capturedAt), ModDate: new Date(options.original ? snapshot.capturedAt : view.payment.asOf) } });
   const chunks: Buffer[] = []; let size = 0;
   const finished = new Promise<Buffer>((resolve, reject) => {
     doc.on("data", (chunk: Buffer) => { size += chunk.length; if (size > 20 * 1024 * 1024) doc.destroy(new Error("PDF size limit exceeded.")); else chunks.push(chunk); });
@@ -136,6 +136,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
       if (t.publicPaymentTerms) paragraph(t.publicPaymentTerms);
     }
     if (snapshot.invoice.notes) { heading("Notes au client"); paragraph(snapshot.invoice.notes); }
+    if (!options.original) {
     ensure(160); heading("Situation des encaissements - actualisée");
     const corrected = view.payment.amountCredited && view.payment.amountCredited !== "0.00";
     const state = corrected && view.payment.amountDue === "0.00" ? view.payment.amountPaid === "0.00" ? "Dette intégralement corrigée, sans encaissement" : "Solde éteint par encaissements et avoirs" : paymentLabels[view.payment.status];
@@ -145,6 +146,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
     paragraph(`RESTE À PAYER : ${formatDocumentMoney(view.payment.amountDue)}`, true);
     if (view.payment.customerCredit && view.payment.customerCredit !== "0.00") paragraph(`CRÉDIT CLIENT : ${formatDocumentMoney(view.payment.customerCredit)}. Aucun remboursement bancaire exécuté.`, true);
     paragraph(`Situation enregistrée le ${date(view.payment.asOf)}. Saisies manuelles déclaratives, sans vérification bancaire. Cet encart peut évoluer ; les lignes et montants émis restent inchangés.`);
+    }
     const range = doc.bufferedPageRange();
     for (let n = 0; n < range.count; n++) { doc.switchToPage(n); text(`${snapshot.invoice.number}  |  ${n + 1} / ${range.count}`, 42, 790, 8); }
     doc.end();

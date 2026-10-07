@@ -6,6 +6,8 @@ import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
 import { calculateCreditLines } from "./credit-note-calculation.js";
 import { deriveCorrectedBalance, financialCents, financialMoney } from "./invoice-balance.js";
+import { persistIssuedArtifact } from "./financial-artifacts.js";
+import { LocalFinancialStorage, type FinancialArtifactStorage } from "./financial-storage.js";
 function found<T>(row: T | undefined): T { if (!row) throw new ResourceNotFoundError("Facture ou avoir introuvable."); return row; }
 function authorize(c: CurrentBusinessUser, permission: Permission) { if (!hasPermission(c.role, permission)) throw new AuthorizationError("Action non autorisée."); }
 const scope = (c: CurrentBusinessUser, id: string): CreditNoteScope => ({ organizationId: c.organizationId, creditNoteId: z.uuid().parse(id) });
@@ -20,7 +22,7 @@ function originalDocument(invoice: Invoice) {
   return original;
 }
 export class CreditNoteService {
-  constructor(private readonly store: CreditNoteStoreInterface) {}
+  constructor(private readonly store: CreditNoteStoreInterface, private readonly artifactStorage: FinancialArtifactStorage = new LocalFinancialStorage()) {}
   private async member(s: CreditNoteSession, c: CurrentBusinessUser, permission: Permission) { authorize(c, permission); const m = await s.membership(c); if (!m) throw new AuthorizationError("Adhésion inactive."); authorize({ ...c, role: m.role }, permission); }
   async searchCreditNotes(c: CurrentBusinessUser, input: unknown = {}) {
     const parsed = searchCreditNotesSchema.parse(input); return this.store.transaction(async s => { await this.member(s, c, "creditNotes.read"); return s.creditNotes.search({ ...parsed, organizationId: c.organizationId }); });
@@ -82,6 +84,7 @@ export class CreditNoteService {
       const issued = found(await s.creditNotes.update(sc, { ...result.totals, number: allocation.number, issueDate: allocation.issueDate, issuedAt: allocation.issuedAt, status: "issued", snapshot }));
       const receipts = await s.payments.summary(is), credited = await s.creditNotes.summary(is), balance = deriveCorrectedBalance(invoice.total, receipts.amount, credited, invoice.status);
       found(await s.invoices.update(is, { ...balance, paidAt: balance.status === "paid" ? receipts.paidAt : null }));
+      await persistIssuedArtifact(s, snapshot, this.artifactStorage);
       return issued;
     });
   }

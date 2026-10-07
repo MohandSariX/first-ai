@@ -13,6 +13,8 @@ import { fictionalInvoiceTerms, fictionalBusinessDetails } from "./test-invoice-
 import { CreditNoteStore, creditNotes, creditNoteItems, creditNoteNumberCounters, financialAuditEvents, InvoiceSession } from "@first-ai/database";
 import { CreditNoteService } from "./credit-note-service.js";
 import { FinancialAuditService } from "./financial-audit-service.js";
+import { FinancialRetentionService } from "./financial-retention-service.js";
+import { financialArtifacts, financialArchiveExports, financialRetentionPolicies } from "@first-ai/database";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
@@ -38,6 +40,7 @@ describe("local invoice foundation", () => {
       await db.insert(quotes).values({ id: quote, organizationId: orgs[n]!, customerId: customerIds[n]!, siteId: site, quoteNumber: "TEST-QUOTE", status: "accepted", createdByUserId: userIds[n]! });
       await db.insert(jobs).values({ id: job, organizationId: orgs[n]!, customerId: customerIds[n]!, siteId: site, quoteId: quote, serviceId: catalog, description: "Fictional completed source", status: "completed", createdByUserId: userIds[n]! });
       contexts.push({ organizationId: orgs[n]!, userId: userIds[n]!, authUserId: authIds[n]!, role: "OWNER" });
+      if (n === 1) await new FinancialRetentionService(store).configure(contexts[n]!, { closingMonth: 12, closingDay: 31, retentionYears: 10 });
       const client = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, clientOptions); const login = await client.auth.signInWithPassword({ email, password }); if (login.error) throw login.error; clients.push(client);
       created.push((await service.createDraftInvoice(contexts[n]!, draft(customerIds[n]!))).id);
       await service.addInvoiceItem(contexts[n]!, created[n]!, { description: "Fictional invoice item", quantity: "2", unitPrice: "100.10", taxRate: "20" });
@@ -54,7 +57,7 @@ describe("local invoice foundation", () => {
           const [fixture] = await tx.select().from(organizations).where(eq(organizations.id, org));
           if (!fixture || !/^Fictional invoice tenant [01]$/.test(fixture.name)) throw new Error("Refuse non-fixture cleanup");
           await tx.execute(sql`set local session_replication_role = replica`);
-          for (const table of [financialAuditEvents, creditNoteItems, creditNotes, creditNoteNumberCounters, payments, invoiceItems, invoices, invoiceNumberCounters]) await tx.delete(table).where(eq(table.organizationId, org));
+          for (const table of [financialArtifacts, financialArchiveExports, financialRetentionPolicies, financialAuditEvents, creditNoteItems, creditNotes, creditNoteNumberCounters, payments, invoiceItems, invoices, invoiceNumberCounters]) await tx.delete(table).where(eq(table.organizationId, org));
         }));
         for (const table of [jobs, quotes, customerSites, services, customers, users]) await clean(db.delete(table).where(eq(table.organizationId, org)));
         await clean(db.delete(organizations).where(eq(organizations.id, org)));
@@ -589,8 +592,9 @@ describe("local invoice foundation", () => {
   it("M5A persists trusted issuance/correction/payment events exactly once with one transaction correlation", async () => {
     const c = contexts[0]!, invoice = await issued(), input = receipt("20");
     const issue = await eventsFor(invoice.id);
-    expect(issue).toHaveLength(1); expect(issue[0]).toMatchObject({ organizationId: c.organizationId, actorUserId: c.userId, actorType: "user", eventType: "invoice.issued", metadata: { number: invoice.invoiceNumber } });
-    await service.issueInvoice(c, invoice.id); expect(await eventsFor(invoice.id)).toHaveLength(1);
+    expect(issue).toHaveLength(2); expect(issue.find(e => e.eventType === "invoice.issued")).toMatchObject({ organizationId: c.organizationId, actorUserId: c.userId, actorType: "user", eventType: "invoice.issued", metadata: { number: invoice.invoiceNumber } });
+    expect(issue.find(e => e.eventType === "invoice.artifact_persisted")?.correlationId).toBe(issue.find(e => e.eventType === "invoice.issued")?.correlationId);
+    await service.issueInvoice(c, invoice.id); expect(await eventsFor(invoice.id)).toHaveLength(2);
     const payment = (await paymentService.recordPayment(c, invoice.id, input)).payment;
     await paymentService.recordPayment(c, invoice.id, input);
     const recorded = await eventsFor(payment.id); expect(recorded).toHaveLength(1);
@@ -598,7 +602,8 @@ describe("local invoice foundation", () => {
     const invoiceEvents = await eventsFor(invoice.id);
     expect(invoiceEvents.find(e => e.eventType === "invoice.status_changed")?.correlationId).toBe(recorded[0]!.correlationId);
     const note = await partial(invoice.id, "10"); await credits().issue(c, note.id); await credits().issue(c, note.id);
-    expect(await eventsFor(note.id)).toEqual([expect.objectContaining({ eventType: "credit_note.issued", actorUserId: c.userId, organizationId: c.organizationId })]);
+    expect((await eventsFor(note.id)).map(e => e.eventType).sort()).toEqual(["credit_note.artifact_persisted", "credit_note.issued"]);
+    expect((await eventsFor(note.id)).every(e => e.actorUserId === c.userId && e.organizationId === c.organizationId)).toBe(true);
     await paymentService.cancelPayment(c, invoice.id, payment.id, { reason: "Erreur de saisie fictive M5A" });
     await paymentService.cancelPayment(c, invoice.id, payment.id, { reason: "Retry fictif" });
     expect((await eventsFor(payment.id)).map(e => e.eventType).sort()).toEqual(["payment.cancelled", "payment.recorded"]);
@@ -645,7 +650,7 @@ describe("local invoice foundation", () => {
     await expect(failedPayment.recordPayment(c, ready.id, receipt())).rejects.toThrow("Payment rollback");
     expect(await ps.payments.list({ organizationId: c.organizationId, invoiceId: ready.id }, { limit: 100, offset: 0 })).toEqual([]);
     expect(await db.select().from(financialAuditEvents).where(sql`${financialAuditEvents.metadata}->>'invoiceId' = ${ready.id}`)).toEqual([]);
-    expect(await eventsFor(ready.id)).toHaveLength(1); // Only committed issuance, no settlement success.
+    expect((await eventsFor(ready.id)).map(e => e.eventType).sort()).toEqual(["invoice.artifact_persisted", "invoice.issued"]); // Only committed issue + original, no settlement success.
   });
   it("M5A protects tenant/RLS/UUID reads, anonymous and revoked memberships; users cannot append audit", async () => {
     const pair = await Promise.all([issued(0), issued(1)]), event = (await eventsFor(pair[1]!.id))[0]!, audit = new FinancialAuditService(store);
@@ -693,7 +698,7 @@ describe("local invoice foundation", () => {
       await s.payments.create({ ...input, paidAt: new Date(input.paidAt), organizationId: c.organizationId, invoiceId: invoice.id, customerId: invoice.customerId, createdByUserId: c.userId, method: "bank_transfer" });
     })).rejects.toThrow("Financial mutation must commit with its derived balance");
     expect(await ps.payments.byKey(c.organizationId, input.idempotencyKey)).toBeUndefined();
-    expect(await eventsFor(invoice.id)).toHaveLength(1);
+    expect((await eventsFor(invoice.id)).map(e => e.eventType).sort()).toEqual(["invoice.artifact_persisted", "invoice.issued"]);
   });
   it("M5A allows only audited administrative notes while leaving the issued commercial document intact", async () => {
     const c = contexts[0]!, invoice = await issued(), saved = structuredClone(invoice.documentSnapshot);
@@ -706,5 +711,88 @@ describe("local invoice foundation", () => {
       await db.update(users).set({ role: "ACCOUNTANT" }).where(eq(users.id, c.userId));
       await expect(service.updateAdministrativeMetadata(c, invoice.id, { internalNotes: "Forbidden" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     } finally { await db.update(users).set({ role: "OWNER" }).where(eq(users.id, c.userId)); }
+  });
+  it("M5B preserves originals with unknown deadline when configuration is incomplete, and identifies legacy honestly", async () => {
+    const c = contexts[0]!, invoice = await issued(), retention = new FinancialRetentionService(store);
+    const original = await retention.original(c, "invoice", invoice.id);
+    expect(original!.bytes.subarray(0,5).toString()).toBe("%PDF-"); expect(original!.artifact.retentionUntil).toBeNull();
+    await expect(retention.createExport(c, { from: "2026-01-01", to: "2026-12-31" })).rejects.toMatchObject({ code: "CONFLICT" });
+    const legacyId = randomUUID(), snap = structuredClone(invoice.documentSnapshot!); snap.invoiceId = legacyId;
+    // Clearly fictional pre-M5B record, no metadata or fake original PDF created.
+    const legacyAt = new Date("2025-12-31T12:00:00.000Z");
+    const legacySnapshot = { ...snap, capturedAt: legacyAt.toISOString(), ...(snap.version >= 3 && "issuance" in snap ? { issuance: { ...snap.issuance, issuedAt: legacyAt.toISOString(), fiscalYear: 2025 } } : {}), invoice: { ...snap.invoice, number: "FAC-2025-000001", issueDate: "2025-12-31" } };
+    // Owner-only local fixture seeding represents history that predates current INSERT guards.
+    if (!["localhost", "127.0.0.1"].includes(new URL(process.env.DATABASE_URL!).hostname)) throw new Error("Remote legacy fixture refused");
+    const fixtureOrg = await db.select().from(organizations).where(eq(organizations.id, c.organizationId));
+    if (fixtureOrg[0]?.name !== "Fictional invoice tenant 0") throw new Error("Non-fixture legacy seed refused");
+    await db.transaction(async tx => {
+      await tx.execute(sql`set local session_replication_role = replica`);
+      await tx.insert(invoices).values({ ...invoice, id: legacyId, draftReference: `BROUILLON-${legacyId}`, invoiceNumber: "FAC-2025-000001", issueDate: "2025-12-31", issuedAt: legacyAt, documentSnapshot: legacySnapshot });
+    });
+    expect(await retention.artifactStatus(c, "invoice", legacyId)).toEqual({ originalPreserved: false, retentionUntil: null });
+    expect(await retention.original(c, "invoice", legacyId)).toBeUndefined();
+  });
+  it("M5B captures close-based deadlines, immutable originals, retry and payment-independent bytes", async () => {
+    const c = contexts[0]!, retention = new FinancialRetentionService(store);
+    await retention.configure(c, { closingMonth: 12, closingDay: 31, retentionYears: 10 });
+    await expect(retention.createExport(c, { from: "2026-01-01", to: "2026-12-31" })).rejects.toMatchObject({ code: "CONFLICT" }); // Historical unknown deadline is not invented by today's policy.
+    const invoice = await issued(), original = (await retention.original(c, "invoice", invoice.id))!;
+    expect(original.artifact.accountingClose).toBe(`${invoice.issueDate!.slice(0,4)}-12-31`);
+    expect(original.artifact.retentionUntil).toBe(`${Number(invoice.issueDate!.slice(0,4))+10}-12-31`);
+    await service.issueInvoice(c, invoice.id); expect((await retention.original(c,"invoice",invoice.id))!.bytes).toEqual(original.bytes);
+    await paymentService.recordPayment(c, invoice.id, receipt("20")); expect((await retention.original(c,"invoice",invoice.id))!.bytes).toEqual(original.bytes);
+    await retention.configure(c, { closingMonth: 6, closingDay: 30, retentionYears: 15 });
+    expect((await retention.original(c,"invoice",invoice.id))!.artifact.retentionUntil).toBe(original.artifact.retentionUntil);
+    for (const input of [{ sha256: "a".repeat(64) }, { retentionUntil: "2020-01-01" }, { storageKey: "../../outside" }]) await expect(db.update(financialArtifacts).set(input).where(eq(financialArtifacts.id,original.artifact.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await expect(db.delete(financialArtifacts).where(eq(financialArtifacts.id,original.artifact.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await expect(db.delete(invoices).where(eq(invoices.id,invoice.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    const note=await partial(invoice.id,"10"), issuedNote=await credits().issue(c,note.id);
+    const creditOriginal=(await retention.original(c,"credit_note",issuedNote.id))!;
+    expect(creditOriginal.bytes.subarray(0,5).toString()).toBe("%PDF-"); expect(creditOriginal.artifact.documentNumber).toBe(issuedNote.number);
+    await credits().issue(c,note.id); expect((await retention.original(c,"credit_note",note.id))!.bytes).toEqual(creditOriginal.bytes);
+  });
+  it("M5B rejects storage failure atomically without consuming fiscal number or committing artifacts/audit", async () => {
+    const c=contexts[0]!, inv=await service.createDraftInvoice(c,draft(customerIds[0]!)); await service.addInvoiceItem(c,inv.id,{description:"Fictional storage failure",quantity:"1",unitPrice:"10",taxRate:"20"});
+    const counter=await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId,c.organizationId));
+    const unavailable=new InvoiceService(store,{put:async()=>{throw new Error("Storage unavailable");},read:async()=>{throw new Error("Storage unavailable");}});
+    await expect(unavailable.issueInvoice(c,inv.id)).rejects.toThrow("Storage unavailable");
+    expect((await service.getInvoice(c,inv.id)).status).toBe("draft"); expect(await eventsFor(inv.id)).toEqual([]);
+    expect(await store.transaction(s=>s.retention.artifact(c.organizationId,"invoice",inv.id))).toBeUndefined();
+    expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId,c.organizationId))).toEqual(counter);
+  });
+  it("M5B exports verified financial records and original PDFs with tenant filtering and no live database restore", async () => {
+    const c=contexts[1]!, retention=new FinancialRetentionService(store);
+    await retention.configure(c,{closingMonth:12,closingDay:31,retentionYears:10});
+    const inv=await service.createDraftInvoice(c,draft(customerIds[1]!)); await service.addInvoiceItem(c,inv.id,{description:"Fictional archive item",quantity:"1",unitPrice:"50",taxRate:"20"}); await service.issueInvoice(c,inv.id);
+    const invoice=await service.getInvoice(c,inv.id);
+    const payment = await paymentService.recordPayment(c, inv.id, receipt("10"));
+    const exporter=retention;
+    const result=await exporter.createExport(c,{from:invoice.issueDate!,to:invoice.issueDate!});
+    const bytes=await exporter.downloadExport(c,result.id), bundle=JSON.parse(bytes.toString());
+    expect(bundle.manifest.organizationId).toBe(c.organizationId); expect(bundle.files.some((f:{name:string})=>f.name===`documents/${inv.id}.pdf`)).toBe(true);
+    expect(await exporter.verifyExport(c,result.id)).toEqual({valid:true,errors:[]});
+    const recordFile = bundle.files.find((f: { name: string }) => f.name === "records.json");
+    const records = JSON.parse(Buffer.from(recordFile.base64, "base64").toString());
+    expect(records.payments.some((p: { id: string; retentionUntil: string }) => p.id === payment.payment.id && p.retentionUntil)).toBe(true);
+    expect(records.auditEvents.some((e: { eventType: string }) => e.eventType === "payment.recorded")).toBe(true);
+    await expect(db.update(financialArchiveExports).set({sha256:"0".repeat(64)}).where(eq(financialArchiveExports.id,result.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await expect(db.delete(financialArchiveExports).where(eq(financialArchiveExports.id,result.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    expect(bytes.toString()).not.toContain("SUPABASE_SERVICE_ROLE_KEY"); expect(bytes.toString()).not.toContain("OPENAI_API_KEY");
+    await expect(exporter.downloadExport(contexts[0]!,result.id)).rejects.toMatchObject({code:"NOT_FOUND"});
+  });
+  it("M5B enforces artifact/policy/export RLS, exact UUID, anonymous, inactive and financial role restrictions", async () => {
+    const c=contexts[0]!, inv=await issued(), retention=new FinancialRetentionService(store), a=(await retention.original(c,"invoice",inv.id))!.artifact;
+    const anon=createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_ANON_KEY!,clientOptions);
+    for(const client of [clients[1]!,anon]) expect((await client.from("financial_artifacts").select("id").eq("id",a.id)).data).toEqual([]);
+    expect(await retention.original(contexts[1]!,"invoice",inv.id)).toBeUndefined();
+    const foreign = await issued(1);
+    await expect(store.transaction(async s => { await s.membership(c); return s.retention.addArtifact({ ...a, id: randomUUID(), entityId: foreign.id }); })).rejects.toMatchObject({cause:{code:"23514"}});
+    try {
+      for(const patch of [{role:"TECHNICIAN" as const},{role:"OWNER" as const,status:"inactive"}]) { await db.update(users).set(patch).where(eq(users.id,c.userId)); expect((await clients[0]!.from("financial_artifacts").select("id").eq("id",a.id)).data).toEqual([]); await expect(retention.original(c,"invoice",inv.id)).rejects.toMatchObject({code:"FORBIDDEN"}); }
+      await db.update(users).set({role:"ACCOUNTANT",status:"active"}).where(eq(users.id,c.userId)); await expect(retention.configure(c,{closingMonth:12,closingDay:31,retentionYears:10})).rejects.toMatchObject({code:"FORBIDDEN"});
+      await db.update(users).set({role:"READ_ONLY"}).where(eq(users.id,c.userId)); expect((await retention.original({...c,role:"READ_ONLY"},"invoice",inv.id))!.bytes.subarray(0,5).toString()).toBe("%PDF-"); await expect(retention.settings(c)).rejects.toMatchObject({code:"FORBIDDEN"});
+    } finally {await db.update(users).set({role:"OWNER",status:"active"}).where(eq(users.id,c.userId));}
+    for(const table of ["financial_artifacts","financial_retention_policies","financial_archive_exports"]) {expect((await anon.from(table).select("*")).data).toEqual([]); expect((await clients[1]!.from(table).select("*").eq("organization_id",c.organizationId)).data).toEqual([]);}
+    const draftInvoice=await service.createDraftInvoice(c,draft(customerIds[0]!)); await db.delete(invoices).where(eq(invoices.id,draftInvoice.id)); expect(await store.invoices.get({organizationId:c.organizationId,invoiceId:draftInvoice.id})).toBeUndefined();
   });
 });

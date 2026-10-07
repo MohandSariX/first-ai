@@ -208,14 +208,15 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
 - **Statut :** adopté, implémenté v1 technique.
 - **Décision :** capturer un snapshot JSONB versionné dans la transaction d’émission,
   depuis les identités réelles et calculs exacts. Protéger snapshot/champs commerciaux
-  SQL ; générer le PDF local à la demande, sans cache objet ni bytes DB. Un encart
-  séparé affiche les encaissements actuels déclaratifs, jamais une modification du corps.
+  SQL ; depuis M5B préserver le PDF original à l’émission hors DB (ADR-26).
+  Une copie explicitement distincte affiche les encaissements actuels déclaratifs,
+  jamais une modification du corps ni des bytes originaux.
 - **Raison :** un changement CRM ne doit pas réécrire une facture ; les paiements
   évoluent indépendamment, avec une source structurée et un solde cohérent.
 - **Conséquences :** aucun backfill des factures historiques ; vendeur incomplet
   bloque l’émission. Adresse client absente explicitement signalée, pas substituée
   par un site. PDF français WinAnsi, refus de glyphes incompatibles. Conformité fiscale,
-  rectificatifs complémentaires, rétention et e-invoicing restent différés ;
+  rectificatifs complémentaires, rétention de production et e-invoicing restent différés ;
   avoirs M4 et audit financier M5A étendent ce socle. Identités/adresses
   client et configuration vendeur sont désormais étendues par ADR-21, sans backfill.
 - **Sources :** `docs/architecture/invoice-documents.md`, InvoiceService, migration 0012.
@@ -296,3 +297,19 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   dans les tests. Propriétaire DB peut encore désactiver les protections : M5B
   doit cadrer privilèges/rétention/archive, pas de promesse WORM ni audit fiscal certifié.
 - **Sources :** `docs/architecture/financial-audit.md`, migrations 0019/0020.
+
+## ADR-26 — Original financier préservé et archive vérifiable, sans faux restore
+
+- **Statut :** adopté, implémenté M5B ; conformité fiscale globale non établie.
+- **Décision :** politique de clôture annuelle explicite et versionnée, échéance depuis
+  clôture, pas anniversaire facture. PDF original généré à l’émission, SHA-256 et metadata
+  immuables, adapter serveur local sans delete/overwrite ; issue/metadata/audit atomiques
+  en PostgreSQL. Copie de situation de paiement séparée, legacy sans faux original.
+- **Raison :** snapshots seuls ne conservent pas les bytes délivrés après évolution
+  renderer ; hash sans stockage/lecture/restauration vérifiée ne constitue pas une archive.
+- **Conséquences :** export JSON/manifest borné sans nouvelle dépendance, vérification
+  offline sans restore DB. Échéance inconnue si clôture non déclarée ; pas de backfill
+  ni purge automatique. DB/filesystem pas atomiques ensemble : orphelin possible au rollback.
+  Stockage/backup/restore durables, exercices atypiques, contrôle propriétaire et WORM
+  ne sont pas certifiés ni fournis par ce socle local. Adapter remplaçable ultérieurement.
+- **Sources :** `docs/architecture/financial-retention.md`, migration 0021.

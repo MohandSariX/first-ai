@@ -7,6 +7,8 @@ import { OperationalConflictError } from "./operational-policies.js";
 import { calculateInvoiceAmounts, type InvoiceCalculationItem } from "./invoice-calculation.js";
 import { createInvoiceDocumentSnapshot, invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 import { invoiceAdministrativeMetadataSchema } from "@first-ai/schemas";
+import { persistIssuedArtifact } from "./financial-artifacts.js";
+import { LocalFinancialStorage, type FinancialArtifactStorage } from "./financial-storage.js";
 
 export function calculateInvoiceTotals(items: readonly InvoiceCalculationItem[]) {
   if (items.length > 200) throw new OperationalConflictError("Maximum 200 lignes par facture.");
@@ -26,7 +28,7 @@ const scope = (c: CurrentBusinessUser, id: string): InvoiceScope => ({ organizat
 function draft(invoice: Invoice) { if (invoice.status !== "draft") throw new OperationalConflictError("Seul un brouillon peut être modifié."); }
 
 export class InvoiceService {
-  constructor(private readonly store: InvoiceStoreInterface) {}
+  constructor(private readonly store: InvoiceStoreInterface, private readonly artifactStorage: FinancialArtifactStorage = new LocalFinancialStorage()) {}
   async updateAdministrativeMetadata(c: CurrentBusinessUser, id: string, input: unknown) {
     authorize(c, "invoices.metadata.write"); const parsed = invoiceAdministrativeMetadataSchema.parse(input), sc = scope(c, id);
     return this.store.transaction(async s => {
@@ -83,7 +85,9 @@ export class InvoiceService {
       if (invoice.dueDate < allocation.issueDate) throw new OperationalConflictError("L’échéance est antérieure à la date réelle d’émission. Créez un brouillon avec une échéance valide ; l’antidatage n’est pas autorisé.");
       const documentSnapshot = createInvoiceDocumentSnapshot({ ...invoice, ...allocation }, items, identity, allocation.issuedAt, { issuedAt: allocation.issuedAt.toISOString(), timeZone: allocation.timeZone, fiscalYear: allocation.fiscalYear });
       if (!invoiceDocumentAvailability(documentSnapshot).available) throw new OperationalConflictError("Émission impossible : configurez le nom, l’adresse, le code postal, la ville et le pays du vendeur avant l’émission.");
-      return found(await s.invoices.update(sc, { invoiceNumber: allocation.invoiceNumber, issueDate: allocation.issueDate, ...documentSnapshot.totals, amountDue: documentSnapshot.totals.total, status: "issued", issuedAt: allocation.issuedAt, documentSnapshot }));
+      const issued = found(await s.invoices.update(sc, { invoiceNumber: allocation.invoiceNumber, issueDate: allocation.issueDate, ...documentSnapshot.totals, amountDue: documentSnapshot.totals.total, status: "issued", issuedAt: allocation.issuedAt, documentSnapshot }));
+      await persistIssuedArtifact(s, documentSnapshot, this.artifactStorage);
+      return issued;
     });
   }
   async getInvoiceDocument(c: CurrentBusinessUser, id: string): Promise<InvoiceDocumentView> {

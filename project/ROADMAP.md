@@ -41,10 +41,13 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
   exacte, série AV à l’émission, soldes/crédit client sans remboursement, RLS et UI/PDF.
 - M5A journal financier append-only atomique, protections SQL documents/lignes/
   suppressions/paiements, revalidation du solde au commit et consultation audit financière.
+- M5B politique de clôture/conservation explicite, originaux PDF immuables avec SHA-256,
+  stockage local contrôlé remplaçable, export JSON/manifest borné et vérification sans restore.
+  Historique sans faux original ; pas de stockage certifié ni de DR production.
 
 ## CURRENT
 
-M5A : implémentation technique et validations terminées ; prochain chantier M5B à cadrer.
+M5B : fondation technique livrée ; prochain chantier M6, sur mission explicite.
 Conformité non établie.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
@@ -59,8 +62,9 @@ envoi, rapprochement ou élargissement du registre IA dans ce jalon.
   3. M2 livré : qualifier séries/émetteurs legacy avant production ; aucune réparation historique implicite.
   4. M3 livré : exceptions, acomptes et qualification des clauses restent à cadrer.
   5. M4 livré : avoirs réductifs ; remplacement/majoration et cas fiscaux exceptionnels à cadrer.
-  6. M5A livré : audit/immutabilité runtime ; M5B : rétention/original conservé,
-     privilèges administratifs et restauration, puis M6 PDF Unicode (avançable si nécessaire).
+  6. M5A/M5B livrés techniquement : audit/immutabilité, rétention/original et export
+     vérifiable ; stockage durable, contrôle administratif/backup/restore production
+     restent à cadrer séparément. M6 PDF Unicode.
   7. M7 : intégration plateforme/e-reporting dédiée, à prioriser séparément si
      émission/reporting déjà exigibles ; un PDF ordinaire n’est pas ce flux.
 - Cadrer facturation partielle/source sans présumer une seule facture par quote/job.

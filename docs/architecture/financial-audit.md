@@ -1,9 +1,10 @@
 # M5A — Audit financier et immutabilité
 
 Fondation technique, **conformité fiscale globale non établie**. Le cadrage reste
-l’[audit français](../compliance/france-invoicing-audit.md). Archivage, sauvegarde,
-conservation de l’original délivré, WORM/PDF-A et politique de purge sont M5B,
-pas des garanties fournies par ce journal PostgreSQL.
+l’[audit français](../compliance/france-invoicing-audit.md). [M5B](financial-retention.md)
+complète la conservation des originaux, politique et export/vérification locaux.
+Sauvegarde production, WORM/PDF-A et workflow de purge ne sont pas des garanties
+fournies par ce journal PostgreSQL ni par ce socle local.
 
 ## Modèle et couverture
 
@@ -23,6 +24,8 @@ pour consultation paginée. Aucun journal synthétique historique : **couverture
 | credit_note.issued / credit_note.cancelled | Émission ou annulation de brouillon |
 | payment.recorded / payment.cancelled | Encaissement manuel ou annulation explicite de saisie |
 | billing.seller_changed / billing.customer_changed / billing.terms_changed | Configuration via le service de facturation |
+| invoice.artifact_persisted / credit_note.artifact_persisted | Original préservé dans la transaction d’émission M5B |
+| billing.retention_changed / billing.archive_exported / billing.archive_verified | Politique, export et résultat de vérification M5B |
 
 Pas de lectures, de chaîne de pensée, de secrets, de copies de profils/adresses,
 de snapshots complets ou de raisons textuelles dans le journal. Les montants,
@@ -104,7 +107,8 @@ migration peuvent techniquement désactiver les triggers, modifier les privilèg
 ou forger le contexte serveur. Les variables transactionnelles ne constituent
 pas une preuve cryptographique d’identité contre ce propriétaire. M5A protège
 les writes runtime ordinaires, pas une administration malveillante, ni WORM.
-Privilèges production, contrôle administratif, archive et restauration restent M5B.
+M5B ajoute une fondation locale ; privilèges/stockage durables et restauration
+réelle de production restent à valider séparément.
 
 ## Migrations et vérifications
 
@@ -128,6 +132,6 @@ les seules tables financières du tenant fixture, puis rétablit automatiquement
 les triggers. Aucun mécanisme installé dans le schéma ou exposé au runtime.
 Les fixtures ne prouvent ni n’autorisent une purge des documents réels.
 
-M5B (rétention/original/sauvegarde), M6 (Unicode), M7 (transport électronique) et
+Fondation M5B livrée ; sauvegarde production, M6 (Unicode), M7 (transport électronique) et
 qualification M0 restent ouverts. Ce journal ne certifie ni la piste d’audit fiscale
 complète ni un logiciel de caisse ; les paiements restent déclaratifs/non bancaires.

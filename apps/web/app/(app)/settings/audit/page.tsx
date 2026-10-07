@@ -8,6 +8,7 @@ export const metadata = { title: "Audit financier" };
 const labels: Readonly<Record<string, string>> = {
   "invoice.issued": "Facture émise", "invoice.cancelled": "Brouillon de facture annulé", "invoice.status_changed": "Situation de facture actualisée", "invoice.metadata_changed": "Note administrative modifiée",
   "credit_note.issued": "Avoir émis", "credit_note.cancelled": "Brouillon d’avoir annulé", "payment.recorded": "Encaissement manuel enregistré", "payment.cancelled": "Saisie d’encaissement annulée",
+  "invoice.artifact_persisted": "Original de facture conservé", "credit_note.artifact_persisted": "Original d’avoir conservé", "billing.retention_changed": "Politique de conservation modifiée", "billing.archive_exported": "Archive financière exportée", "billing.archive_verified": "Archive financière vérifiée",
   "billing.seller_changed": "Identité vendeur configurée", "billing.customer_changed": "Identité client configurée", "billing.terms_changed": "Conditions de règlement configurées",
 };
 export default async function FinancialAuditPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {

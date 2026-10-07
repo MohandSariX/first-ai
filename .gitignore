@@ -39,3 +39,6 @@ pnpm-debug.log*
 # Local AI model caches/binaries never belong in the repository
 .ollama/
 *.gguf
+
+# Private local financial document objects and archive bundles
+.financial-storage/

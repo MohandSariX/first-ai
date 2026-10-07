@@ -79,9 +79,10 @@ Fixtures are fictional; local-only owner cleanup is isolated in tests, with no r
 
 M4 adds invoice-attached customer credit from issued corrections, not an unallocated
 receipt or refund. Existing receipt history is unchanged and receipt cancellation
-recalculates the economic balance with credits. Invoice PDFs show the current dated
-correction/debt/credit section separately from their immutable commercial body.
+recalculates the economic balance with credits. Current invoice copies show the dated
+correction/debt/credit section separately; M5B preserved originals omit dynamic payments.
 
 No fiscal/production compliance claim, reimbursement workflow, unallocated credit,
-universal audit, automated overdue transition or banking verification. Payment evidence,
-retention/archives and comprehensive audit/export remain future milestones.
+universal audit, automated overdue transition or banking verification.
+M5B provides bounded financial archives and verification; production retention/storage,
+backups and real restore remain separate work. See [financial retention](financial-retention.md).

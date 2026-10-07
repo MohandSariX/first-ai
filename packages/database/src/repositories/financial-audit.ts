@@ -18,4 +18,7 @@ export class FinancialAuditRepository {
   async configuration(c: { organizationId: string; userId: string }, entityType: "organization" | "customer", entityId: string, eventType: "billing.seller_changed" | "billing.customer_changed" | "billing.terms_changed", fields: string[]) {
     await this.db.execute(sql`insert into public.financial_audit_events (organization_id, entity_type, entity_id, event_type, actor_user_id, correlation_id, metadata) values (${c.organizationId}::uuid, ${entityType}, ${entityId}::uuid, ${eventType}, ${c.userId}::uuid, current_setting('first_ai.correlation')::uuid, ${JSON.stringify({ fields })}::jsonb)`);
   }
+  async archive(c: { organizationId: string; userId: string }, eventType: "billing.retention_changed" | "billing.archive_exported" | "billing.archive_verified", metadata: { fields?: string[]; number?: string; to?: string }) {
+    await this.db.execute(sql`insert into public.financial_audit_events (organization_id,entity_type,entity_id,event_type,actor_user_id,correlation_id,metadata) values (${c.organizationId}::uuid,'organization',${c.organizationId}::uuid,${eventType},${c.userId}::uuid,current_setting('first_ai.correlation')::uuid,${JSON.stringify(metadata)}::jsonb)`);
+  }
 }

@@ -32,6 +32,15 @@ function renderedText(pdf: Buffer): string {
   return result;
 }
 describe("invoice documents", () => {
+  it("M5B original PDF omits dynamic receipts and is byte-identical after payments change", async () => {
+    const view = fixture(), original = await generateInvoicePdf(view, { original: true });
+    expect(original.subarray(0,5).toString()).toBe("%PDF-"); expect(renderedText(original)).toContain("FAC-2026-000001");
+    expect(renderedText(original)).not.toContain("Situation des encaissements");
+    view.payment = { status: "paid", amountPaid: "225.50", amountDue: "0.00", asOf: "2026-10-07T12:00:00Z" };
+    expect(await generateInvoicePdf(view, { original: true })).toEqual(original);
+    expect(renderedText(await generateInvoicePdf(view))).toContain("État : Réglée");
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-original-m5b-qa.pdf", original);
+  });
   it("keeps exact money display without floating-point conversion", () => {
     expect(formatDocumentMoney("999999999999.99")).toBe("999 999 999 999,99 €");
     expect(() => formatDocumentMoney("0.001")).toThrow();
