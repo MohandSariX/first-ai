@@ -51,5 +51,5 @@ export function invoiceDocumentAvailability(value: unknown): { available: boolea
 
 export interface InvoiceDocumentView {
   snapshot: InvoiceDocumentSnapshot;
-  payment: { status: Invoice["status"]; amountPaid: string; amountDue: string; asOf: string };
+  payment: { status: Invoice["status"]; amountPaid: string; amountDue: string; amountCredited?: string; customerCredit?: string; asOf: string };
 }

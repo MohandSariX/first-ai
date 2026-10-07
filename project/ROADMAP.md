@@ -37,10 +37,12 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
   avec fuseau/année et snapshot v3 ; concurrence/rollback/retry testés, legacy préservé.
 - M3 dates métier confirmées, commande/livraison, unités/remises/frais exacts,
   termes/TVA conditionnels configurés et snapshot/PDF v4 ; périmètre domestique ordinaire.
+- M4 avoirs partiels/complets liés au document original immuable, TVA cumulative
+  exacte, série AV à l’émission, soldes/crédit client sans remboursement, RLS et UI/PDF.
 
 ## CURRENT
 
-M3 livré techniquement ; aucun jalon
+M4 livré techniquement ; aucun jalon
 en cours. Conformité non établie.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
@@ -54,7 +56,7 @@ envoi, rapprochement ou élargissement du registre IA dans ce jalon.
   2. M1 livré : ne pas déduire la validation fiscale de la présence des nouveaux champs.
   3. M2 livré : qualifier séries/émetteurs legacy avant production ; aucune réparation historique implicite.
   4. M3 livré : exceptions, acomptes et qualification des clauses restent à cadrer.
-  5. M4 : avoirs/rectificatifs explicites et soldes corrigés, sans réécriture de l’original.
+  5. M4 livré : avoirs réductifs ; remplacement/majoration et cas fiscaux exceptionnels à cadrer.
   6. M5/M6 : audit/rétention/original conservé, puis PDF Unicode (avançable si nécessaire).
   7. M7 : intégration plateforme/e-reporting dédiée, à prioriser séparément si
      émission/reporting déjà exigibles ; un PDF ordinaire n’est pas ce flux.

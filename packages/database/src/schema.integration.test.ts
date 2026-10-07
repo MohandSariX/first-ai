@@ -11,6 +11,9 @@ const expectedTables = [
   "ai_settings",
   "approval_requests",
   "contacts",
+  "credit_note_items",
+  "credit_note_number_counters",
+  "credit_notes",
   "customer_sites",
   "customers",
   "invoice_items",
@@ -33,6 +36,7 @@ const expectedEnums = [
   "agent_tool_call_status",
   "approval_status",
   "billing_classification",
+  "credit_note_status",
   "customer_risk_level",
   "customer_status",
   "customer_type",
@@ -167,7 +171,7 @@ describe("local Supabase database schema", () => {
       from drizzle.__drizzle_migrations
     `);
 
-    expect(result).toEqual([{ migrationCount: 17 }]);
+    expect(result).toEqual([{ migrationCount: 19 }]);
   });
 
   it("enables RLS with the expected read policies", async () => {

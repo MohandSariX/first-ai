@@ -120,6 +120,20 @@
       "when": 1791301290202,
       "tag": "0016_striped_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791302948111,
+      "tag": "0017_bright_spyke",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791307977656,
+      "tag": "0018_panoramic_white_tiger",
+      "breakpoints": true
     }
   ]
 }

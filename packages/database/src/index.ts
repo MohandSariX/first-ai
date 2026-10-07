@@ -7,3 +7,4 @@ export * from "./repositories/operations.js";
 export * from "./repositories/approvals.js";
 export * from "./repositories/invoices.js";
 export * from "./repositories/payments.js";
+export * from "./repositories/credit-notes.js";

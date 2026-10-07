@@ -3,7 +3,7 @@
 Fondation technique issue de l’[audit français](../compliance/france-invoicing-audit.md).
 **Pas de certification fiscale ni d’autorisation d’usage fiscal production.**
 [M2 numéro/date](invoice-numbering.md) étend ce snapshot en v3 ; [M3 mentions](invoice-mentions.md)
-le porte désormais en v4 pour les nouvelles émissions ; M4–M7
+le porte désormais en v4 pour les nouvelles émissions ; M5–M7
 restent distincts. Aucune intégration électronique ou mutation IA ajoutée.
 
 ## Modèle et migration
@@ -119,6 +119,6 @@ rollback, profils modifiés après issue, classification SQL immuable et franchi
 E2E mobile : configuration vendeur/client, séparation site, rejet sans qualification,
 émission puis PDF ; anciennes attentes de navigation synchronisées sur route détail.
 
-M2 numérotation/date et M3 dates métier/mentions sont livrés séparément ; M4 avoirs,
-M5 rétention/audit, M6 Unicode et M7 plateforme restent non implémentés. Réception électronique déjà
+M2 numérotation/date, M3 dates métier/mentions et [M4 avoirs](credit-notes.md) sont livrés
+séparément ; M5 rétention/audit, M6 Unicode et M7 plateforme restent non implémentés. Réception électronique déjà
 applicable à qualifier sans attendre ces jalons. Aucun email, paiement bancaire ou IA write.

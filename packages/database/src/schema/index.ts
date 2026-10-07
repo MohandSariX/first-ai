@@ -21,3 +21,4 @@ export * from "./approval-requests.js";
 export * from "./invoices.js";
 export * from "./payments.js";
 export * from "./billing-enums.js";
+export * from "./credit-notes.js";

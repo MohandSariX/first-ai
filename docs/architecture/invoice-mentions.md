@@ -80,8 +80,8 @@ configuration, refus UUID étranger et protections SQL. Les tests existants couv
 RBAC/RLS, anonymes et membership inactif. E2E : date/commande puis émission et PDF.
 
 Hors portée : acomptes/prestations futures, fiscalité internationale et exceptions
-sectorielles, clauses B2G exhaustives, garanties particulières B2C, M4 corrections,
-M5 archive/audit, M6 Unicode et M7 plateforme/e-reporting. La seule présence de
+sectorielles, clauses B2G exhaustives, garanties particulières B2C, rectificatifs
+hors avoirs réductifs [M4](credit-notes.md), M5 archive/audit, M6 Unicode et M7 plateforme/e-reporting. La seule présence de
 mentions ne permet pas de déclarer First AI fiscalement conforme.
 
 Références officielles vérifiées le 2026-10-06 :

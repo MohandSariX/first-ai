@@ -88,7 +88,7 @@ export class InvoiceService {
       if (!availability.available || !invoice.issuedAt || invoice.status === "draft") throw new OperationalConflictError(availability.message ?? "Une facture brouillon ne possède pas de document émis.");
       const snapshot = invoiceDocumentSnapshotSchema.parse(invoice.documentSnapshot);
       if (snapshot.organizationId !== c.organizationId || snapshot.invoiceId !== invoice.id) throw new OperationalConflictError("Document de facture invalide.");
-      return { snapshot, payment: { status: invoice.status, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, asOf: invoice.updatedAt.toISOString() } };
+      return { snapshot, payment: { status: invoice.status, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, amountCredited: invoice.amountCredited, customerCredit: invoice.customerCredit, asOf: invoice.updatedAt.toISOString() } };
     });
   }
   async cancelInvoice(c: CurrentBusinessUser, id: string) { authorize(c, "invoices.write"); const sc = scope(c, id); return this.store.transaction(async s => { assertInvoiceTransition(found(await s.invoices.get(sc, true)).status, "cancelled"); return found(await s.invoices.update(sc, { status: "cancelled" })); }); }

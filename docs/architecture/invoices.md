@@ -17,8 +17,9 @@ follow existing conventions. Invoice items carry organization_id for composite
 parent/service integrity. Parent references restrict deletion; dependent items
 alone cascade on controlled fixture/administrative invoice deletion.
 
-Contract links, delivery/sent_at, accounting references and credit notes remain
-deferred. Technical PDFs now use [immutable documents](invoice-documents.md).
+Contract links, sent_at and accounting references remain deferred. M3 stores
+confirmed execution/delivery data; M4 implements separate [credit notes](credit-notes.md).
+Technical PDFs use [immutable documents](invoice-documents.md).
 Payment snapshots and manual receipts
 are now implemented separately in [payment tracking](payments.md). Item totals are derived,
 not redundantly stored; invoice totals are transactional snapshots.

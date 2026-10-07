@@ -3,6 +3,7 @@ import PDFDocument from "pdfkit";
 import { invoiceDocumentSnapshotSchema } from "@first-ai/schemas";
 import { invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 import { OperationalConflictError } from "./operational-policies.js";
+import { financialCents } from "./invoice-balance.js";
 
 export function formatDocumentMoney(value: string): string {
   if (!/^\d+\.\d{2}$/.test(value)) throw new OperationalConflictError("Montant de document invalide.");
@@ -17,7 +18,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
   const snapshot = invoiceDocumentSnapshotSchema.parse(view.snapshot);
   const available = invoiceDocumentAvailability(snapshot);
   if (!available.available) throw new OperationalConflictError(available.message ?? "Document indisponible.");
-  if (BigInt(view.payment.amountPaid.replace(".", "")) + BigInt(view.payment.amountDue.replace(".", "")) !== BigInt(snapshot.totals.total.replace(".", ""))) throw new OperationalConflictError("Solde du document incohérent.");
+  if (financialCents(snapshot.totals.total) - financialCents(view.payment.amountCredited ?? "0") - financialCents(view.payment.amountPaid) !== financialCents(view.payment.amountDue) - financialCents(view.payment.customerCredit ?? "0")) throw new OperationalConflictError("Solde du document incohérent.");
   // Built-in WinAnsi fonts cover French. Reject unsupported glyphs instead of silently corrupting names.
   const safeText = (text: string) => {
     if (/[^\x20-\x7e\xa0-\xff\n\r\t€œŒŠšŸŽž•–—‘’‚“”„…†‡‰‹›™]/u.test(text)) throw new OperationalConflictError("Le PDF v1 ne prend pas encore en charge certains caractères. Aucun document altéré ne sera généré.");
@@ -136,9 +137,13 @@ export async function generateInvoicePdf(view: InvoiceDocumentView): Promise<Buf
     }
     if (snapshot.invoice.notes) { heading("Notes au client"); paragraph(snapshot.invoice.notes); }
     ensure(160); heading("Situation des encaissements - actualisée");
-    paragraph(`État : ${paymentLabels[view.payment.status]}`);
+    const corrected = view.payment.amountCredited && view.payment.amountCredited !== "0.00";
+    const state = corrected && view.payment.amountDue === "0.00" ? view.payment.amountPaid === "0.00" ? "Dette intégralement corrigée, sans encaissement" : "Solde éteint par encaissements et avoirs" : paymentLabels[view.payment.status];
+    paragraph(`État : ${state}`);
     paragraph(`Encaissements enregistrés : ${formatDocumentMoney(view.payment.amountPaid)}`);
+    if (view.payment.amountCredited && view.payment.amountCredited !== "0.00") paragraph(`Avoirs émis : ${formatDocumentMoney(view.payment.amountCredited)}. Compensation de dette, pas un remboursement.`);
     paragraph(`RESTE À PAYER : ${formatDocumentMoney(view.payment.amountDue)}`, true);
+    if (view.payment.customerCredit && view.payment.customerCredit !== "0.00") paragraph(`CRÉDIT CLIENT : ${formatDocumentMoney(view.payment.customerCredit)}. Aucun remboursement bancaire exécuté.`, true);
     paragraph(`Situation enregistrée le ${date(view.payment.asOf)}. Saisies manuelles déclaratives, sans vérification bancaire. Cet encart peut évoluer ; les lignes et montants émis restent inchangés.`);
     const range = doc.bufferedPageRange();
     for (let n = 0; n < range.count; n++) { doc.switchToPage(n); text(`${snapshot.invoice.number}  |  ${n + 1} / ${range.count}`, 42, 790, 8); }

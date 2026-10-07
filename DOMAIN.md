@@ -762,6 +762,13 @@ Statuts :
 
 ## 25. Paiements
 
+Correction implémentée M4 : **CreditNote** est un document réductif distinct, lié à
+une Invoice émise et à ses lignes de snapshot immuable. Partiel/complet sur bases
+HT restantes ; TVA déterministe, statut draft/issued/cancelled, numéro AV à l’émission.
+Les avoirs émis et paiements déclarés donnent un solde net : dette restante ou crédit
+client explicite, jamais remboursement implicite. Pas de facture de remplacement ni
+majoration dans ce périmètre. Voir [fondation avoirs](docs/architecture/credit-notes.md).
+
 ### Payment
 
 Champs :

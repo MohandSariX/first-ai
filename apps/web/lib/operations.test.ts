@@ -18,4 +18,11 @@ describe("operational permission-aware UI", () => {
     expect(parseOperationalForm("billing.customer", form)).toMatchObject({ billingName: "Client fictif", taxablePerson: null, billingAddressLine1: null });
     form.set("taxablePerson", "no"); expect(parseOperationalForm("billing.customer", form)).toMatchObject({ taxablePerson: false });
   });
+  it("M4 validates explicit original line selection and keeps correction money exact", () => {
+    const form = new FormData(); form.set("subtotal", "20.01");
+    expect(() => parseOperationalForm("credit.setItem", form)).toThrow();
+    form.set("originalLineIndex", "0"); expect(parseOperationalForm("credit.setItem", form)).toEqual({ originalLineIndex: 0, subtotal: "20.01" });
+    form.set("subtotal", "-1"); expect(() => parseOperationalForm("credit.setItem", form)).toThrow();
+    form.set("originalLineIndex", "200"); expect(() => parseOperationalForm("credit.removeItem", form)).toThrow();
+  });
 });

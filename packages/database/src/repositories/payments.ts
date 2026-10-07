@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { createDatabaseClient } from "../client.js";
-import { organizations, payments, users } from "../schema/index.js";
+import { organizations, payments, users, creditNotes } from "../schema/index.js";
 import { InvoiceRepository, type InvoiceScope } from "./invoices.js";
 
 type Database = ReturnType<typeof createDatabaseClient>;
@@ -24,6 +24,7 @@ export class PaymentSession {
   readonly invoices: InvoiceRepository;
   readonly payments: PaymentRepository;
   constructor(private readonly db: Session) { this.invoices = new InvoiceRepository(db); this.payments = new PaymentRepository(db); }
+  async creditSummary(s: InvoiceScope) { const [r] = await this.db.select({ amount: sql<string>`coalesce(sum(${creditNotes.total}),0)::text` }).from(creditNotes).where(and(eq(creditNotes.organizationId, s.organizationId), eq(creditNotes.originalInvoiceId, s.invoiceId), eq(creditNotes.status, "issued"))); if (!r) throw new Error("Credit summary failed"); return r.amount; }
   async membership(i: PaymentIdentity) {
     // Shared locks keep membership/organization valid until financial commit.
     const [org] = await this.db.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, i.organizationId), eq(organizations.status, "active"), isNull(organizations.deletedAt))).for("share");

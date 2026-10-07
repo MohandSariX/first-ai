@@ -373,7 +373,7 @@ profils structurés/UI, classification explicite et snapshot v2 des nouvelles
 émissions. Voir [périmètre, contrôles et limitations M1](../architecture/billing-identities.md).
 La matrice ci-dessus reste le constat historique du 05/10/2026, pas une matrice
 réécrite pour prétendre à la conformité ; M2/M3 sont livrés techniquement ci-dessous,
-M4–M7, les exceptions M3 et la qualification M0 restent ouverts.
+M5–M7, les exceptions M3/M4 et la qualification M0 restent ouverts.
 
 - Petit modèle/UI vendeur et adresses client distinctes ; données fiscales
   qualifiées et champs conditionnels, aucune adresse de site implicite.
@@ -402,7 +402,7 @@ Les constats de l’audit restent historiques ; aucune conformité globale certi
 migration additive 0016 et snapshot v4. Dates/commande, unités/remises/frais,
 TVA et termes conditionnels configurés ; acomptes et exceptions non couverts.
 Voir [implémentation et limites M3](../architecture/invoice-mentions.md).
-La matrice décrit l’audit initial ; M0 et M4–M7 restent ouverts, conformité non établie.
+La matrice décrit l’audit initial ; M0 et M5–M7 restent ouverts, conformité non établie.
 
 - Dates d’exécution/acompte, commande, unité, réductions/frais exacts, qualification
   TVA et textes validés, règlement/escompte/pénalités adaptés au client.
@@ -412,6 +412,13 @@ La matrice décrit l’audit initial ; M0 et M4–M7 restent ouverts, conformit�
 - Garder la séparation snapshot original / encart manuel daté ; aucun AI arithmetic.
 
 ### M4 — Avoirs et rectificatifs
+
+**Statut d’implémentation : livré techniquement pour les avoirs réductifs**, migrations
+additives 0017/0018, référence originale immuable, partial/full HT/TVA, série AV à l’émission,
+solde/crédit client, UI/PDF et protections tenant/concurrence. Voir
+[périmètre et limites M4](../architecture/credit-notes.md).
+Facture de remplacement, majoration et cas fiscaux exceptionnels restent à cadrer.
+La matrice historique n’est pas une attestation ; conformité globale non établie.
 
 - Domaines/services explicites de correction partielle/totale, numérotation,
   références originales et impact déterministe sur soldes/crédits ; validation

@@ -1,0 +1,1 @@
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_recorded_payments_ceiling_check" CHECK ("invoices"."amount_paid" <= "invoices"."total");

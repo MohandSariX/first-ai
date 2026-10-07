@@ -1615,6 +1615,13 @@ sort_order
 
 # 47. Table payments
 
+Extension implémentée M4 : `credit_notes` et `credit_note_items` distincts des factures,
+FK composites organisation/facture/auteur, snapshot d’avoir immuable et série AV
+allouée à l’émission via `credit_note_number_counters` privé. Les factures ajoutent
+`amount_credited` et `customer_credit` dérivés, sans modifier leurs montants originaux
+ni l’historique des paiements. Schéma/transactions/RLS/limites détaillés dans
+[docs/architecture/credit-notes.md](docs/architecture/credit-notes.md) ; pas de remboursement.
+
 ```text
 payments
 ```

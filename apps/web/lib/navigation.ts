@@ -9,6 +9,7 @@ export const navigationItems = [
   { href: "/quotes", label: "Devis", short: "Devis", icon: "▤", permission: "quotes.read" },
   { href: "/jobs", label: "Interventions", short: "Terrain", icon: "◷", permission: "jobs.read" },
   { href: "/invoices", label: "Factures", short: "Factures", icon: "▤", permission: "invoices.read" },
+  { href: "/credit-notes", label: "Avoirs", short: "Avoirs", icon: "▤", permission: "creditNotes.read" },
 ] as const;
 
 export function getNavigationItems(role: UserRole) {

@@ -68,6 +68,16 @@ describe("invoice documents", () => {
     expect((bytes.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(2);
     if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-long-qa.pdf", bytes);
   });
+  it("M4 appends current credit/debt information without rewriting original amounts", async () => {
+    const view = fixture(), snapshot = structuredClone(view.snapshot);
+    view.payment = { ...view.payment, status: "partially_paid", amountPaid: "100.00", amountCredited: "20.00", amountDue: "105.50", customerCredit: "0.00" };
+    const partialText = renderedText(await generateInvoicePdf(view));
+    expect(partialText).toContain("Avoirs émis : 20,00 €"); expect(partialText).toContain("105,50 €"); expect(partialText).toContain("TOTAL TTC : 225,50 €");
+    view.payment = { ...view.payment, status: "paid", amountPaid: "225.50", amountDue: "0.00", customerCredit: "20.00" };
+    const paidText = renderedText(await generateInvoicePdf(view));
+    expect(paidText).toContain("CRÉDIT CLIENT : 20,00 €"); expect(paidText).toContain("Aucun remboursement bancaire");
+    expect(view.snapshot).toEqual(snapshot);
+  });
   it("fails explicitly instead of silently replacing unsupported identity glyphs", async () => {
     const view = fixture(); view.snapshot.customer.name = "客户";
     await expect(generateInvoicePdf(view)).rejects.toMatchObject({ code: "CONFLICT" });

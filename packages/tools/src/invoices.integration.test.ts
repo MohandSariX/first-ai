@@ -10,6 +10,8 @@ import { PaymentService } from "./payment-service.js";
 import { BillingIdentityService } from "./billing-service.js";
 import { sellerBillingSchema, customerBillingSchema, invoiceIssueCalendar } from "@first-ai/schemas";
 import { fictionalInvoiceTerms, fictionalBusinessDetails } from "./test-invoice-mentions.js";
+import { CreditNoteStore, creditNotes, creditNoteItems, creditNoteNumberCounters } from "@first-ai/database";
+import { CreditNoteService } from "./credit-note-service.js";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
@@ -44,7 +46,7 @@ describe("local invoice foundation", () => {
     const errors: unknown[] = [];
     async function clean(operation: PromiseLike<unknown>) { try { await operation; } catch (error) { errors.push(error); } }
     if (db) {
-      for (const org of orgs) { for (const table of [payments, invoiceItems, invoices, jobs, quotes, customerSites, services, customers, users]) await clean(db.delete(table).where(eq(table.organizationId, org))); await clean(db.delete(organizations).where(eq(organizations.id, org))); }
+      for (const org of orgs) { for (const table of [creditNotes, payments, invoiceItems, invoices, jobs, quotes, customerSites, services, customers, users]) await clean(db.delete(table).where(eq(table.organizationId, org))); await clean(db.delete(organizations).where(eq(organizations.id, org))); }
       await clean(db.$client.end());
     }
     if (admin) for (const id of authIds) { const result = await admin.auth.admin.deleteUser(id); if (result.error) errors.push(result.error); }
@@ -173,6 +175,136 @@ describe("local invoice foundation", () => {
     await expect(service.issueInvoice(accountant, linked.id)).rejects.toMatchObject({ code: "CONFLICT" });
   });
   const receipt = (amount = "10") => ({ amount, method: "bank_transfer", paidAt: "2026-01-01T12:00:00Z", reference: "Fictional receipt", idempotencyKey: randomUUID() });
+  const credits = () => new CreditNoteService(new CreditNoteStore(db));
+  const creditInput = (id: string, correctionType: "partial" | "full" = "partial") => ({ originalInvoiceId: id, correctionType, reason: "Correction tarifaire fictive M4", idempotencyKey: randomUUID() });
+  async function partial(id: string, amount: string, n = 0) {
+    const c = contexts[n]!, note = await credits().createDraft(c, creditInput(id));
+    await credits().setItem(c, note.id, { originalLineIndex: 0, subtotal: amount }); return note;
+  }
+  it("M4 drafts do not allocate AV numbers; issue/retry freezes a partial correction without changing the original", async () => {
+    const c = contexts[0]!, invoice = await issued(), original = structuredClone(invoice), input = creditInput(invoice.id);
+    const originalItems = structuredClone((await service.getInvoice(c, invoice.id)).items);
+    const note = await credits().createDraft(c, input);
+    expect(note).toMatchObject({ status: "draft", number: null, issuedAt: null, snapshot: null });
+    expect((await credits().createDraft(c, input)).id).toBe(note.id);
+    await credits().setItem(c, note.id, { originalLineIndex: 0, subtotal: "20" });
+    const result = await credits().issue(c, note.id), year = invoiceIssueCalendar(result.issuedAt!, "Europe/Paris").fiscalYear;
+    expect(result.number).toBe(`AV-${year}-000001`);
+    expect(result.snapshot).toMatchObject({ originalInvoice: original.documentSnapshot, totals: { subtotal: "20.00", taxAmount: "0.00", total: "20.00" } });
+    expect(await credits().issue(c, note.id)).toEqual(result);
+    const after = await service.getInvoice(c, invoice.id);
+    for (const key of ["invoiceNumber", "issueDate", "issuedAt", "subtotal", "taxAmount", "total", "documentSnapshot"] as const) expect(after[key]).toEqual(original[key]);
+    expect(after).toMatchObject({ amountCredited: "20.00", amountDue: "80.00", customerCredit: "0.00", amountPaid: "0.00", status: "issued" });
+    await expect(credits().setItem(c, note.id, { originalLineIndex: 0, subtotal: "1" })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(credits().cancel(c, note.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    for (const patch of [{ number: `AV-${year}-999999` }, { reason: "Edited" }, { snapshot: null }, { originalInvoiceId: created[0]! }]) await expect(db.update(creditNotes).set(patch).where(eq(creditNotes.id, note.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(creditNoteItems).set({ subtotal: "1", total: "1" }).where(eq(creditNoteItems.creditNoteId, note.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.delete(creditNoteItems).where(eq(creditNoteItems.creditNoteId, note.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    expect((await service.getInvoice(c, invoice.id)).items).toEqual(originalItems);
+  });
+  it("M4 serializes AV numbering, skips abandoned drafts and rolls back failed issuance after allocation", async () => {
+    const c = contexts[0]!, invoice = await issued(), cancelled = await partial(invoice.id, "1");
+    await credits().cancel(c, cancelled.id); await expect(credits().issue(c, cancelled.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    const first = await partial(invoice.id, "10"), second = await partial(invoice.id, "10"), counter = await db.select().from(creditNoteNumberCounters).where(eq(creditNoteNumberCounters.organizationId, c.organizationId));
+    const real = new CreditNoteStore(db);
+    const failing = new CreditNoteService({ creditNotes: real.creditNotes, transaction: work => real.transaction(async s => { s.invoices.update = async () => { throw new Error("Fictional M4 balance persistence failure"); }; return work(s); }) });
+    await expect(failing.issue(c, first.id)).rejects.toThrow("Fictional M4 balance persistence failure");
+    expect(await db.select().from(creditNoteNumberCounters).where(eq(creditNoteNumberCounters.organizationId, c.organizationId))).toEqual(counter);
+    expect(await credits().getCreditNote(c, first.id)).toMatchObject({ status: "draft", number: null, snapshot: null });
+    const b = await credits().issue(c, second.id), a = await credits().issue(c, first.id);
+    expect(Number(a.number!.split("-").at(-1))).toBe(Number(b.number!.split("-").at(-1)) + 1);
+    expect(a.issuedAt!.getTime()).toBeGreaterThanOrEqual(b.issuedAt!.getTime());
+    const pair = await Promise.all([issued(), issued()]), notes = await Promise.all(pair.map(i => partial(i.id, "10")));
+    const result = await Promise.all(notes.map(n => credits().issue(c, n.id))), numbers = result.map(n => Number(n.number!.split("-").at(-1))).sort((a,b) => a-b);
+    expect(numbers[1]).toBe(numbers[0]! + 1);
+    await expect(db.update(creditNoteNumberCounters).set({ lastNumber: 1 }).where(eq(creditNoteNumberCounters.organizationId, c.organizationId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.delete(creditNoteNumberCounters).where(eq(creditNoteNumberCounters.organizationId, c.organizationId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    const empty = await credits().createDraft(c, creditInput(invoice.id));
+    await expect(credits().issue(c, empty.id)).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+  it("M4 prevents concurrent over-correction and stale full drafts; corrects the remaining base only", async () => {
+    const c = contexts[0]!, invoice = await issued(), full = await credits().createDraft(c, creditInput(invoice.id, "full"));
+    const notes = await Promise.all([partial(invoice.id, "70"), partial(invoice.id, "70")]);
+    const before = await db.select().from(creditNoteNumberCounters).where(eq(creditNoteNumberCounters.organizationId, c.organizationId));
+    const results = await Promise.allSettled(notes.map(n => credits().issue(c, n.id)));
+    expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1); expect(results.filter(r => r.status === "rejected")).toHaveLength(1);
+    expect((await db.select().from(creditNoteNumberCounters).where(eq(creditNoteNumberCounters.organizationId, c.organizationId)))[0]!.lastNumber).toBe(before[0]!.lastNumber + 1);
+    const loserId = (await credits().getCreditNote(c, notes[0]!.id)).status === "draft" ? notes[0]!.id : notes[1]!.id;
+    const loser = await credits().getCreditNote(c, loserId);
+    const originalLine = loser.original.lines[0]!;
+    // Bypass the service's prior-correction calculation deliberately: PostgreSQL must reject too.
+    await expect(new CreditNoteStore(db).transaction(async s => {
+      const sc = { organizationId: c.organizationId, creditNoteId: loserId };
+      await s.invoices.get({ organizationId: c.organizationId, invoiceId: invoice.id }, true);
+      const allocation = await s.creditNotes.allocate(sc);
+      const snapshot = { version: 1 as const, organizationId: c.organizationId, creditNoteId: loserId, ...allocation, issuedAt: allocation.issuedAt.toISOString(), originalInvoice: loser.original, reason: loser.reason, correctionType: "partial" as const, lines: [{ originalLineIndex: 0, description: originalLine.description, originalQuantity: originalLine.quantity, unit: "unit" in originalLine ? originalLine.unit : null, taxRate: "0.000", subtotal: "70.00", taxAmount: "0.00", total: "70.00" }], totals: { subtotal: "70.00", taxAmount: "0.00", total: "70.00" }, taxes: [{ rate: "0.000", base: "70.00", amount: "0.00" }] };
+      await s.creditNotes.update(sc, { status: "issued", number: allocation.number, issueDate: allocation.issueDate, issuedAt: allocation.issuedAt, snapshot });
+    })).rejects.toMatchObject({ cause: { code: "23514", message: "Cumulative overcorrection" } });
+    await expect(credits().issue(c, full.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    const remaining = await credits().createDraft(c, creditInput(invoice.id, "full"));
+    expect(remaining.total).toBe("30.00"); await credits().issue(c, remaining.id);
+    expect(await service.getInvoice(c, invoice.id)).toMatchObject({ total: "100.00", amountCredited: "100.00", amountDue: "0.00", amountPaid: "0.00", customerCredit: "0.00" });
+    await expect(db.update(invoices).set({ amountPaid: "101.00", amountCredited: "0.00", amountDue: "0.00", customerCredit: "1.00" }).where(eq(invoices.id, invoice.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(credits().createDraft(c, creditInput(invoice.id))).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+  it("M4 preserves manual payment history and distinguishes debt/credit, including payment after correction", async () => {
+    const c = contexts[0]!;
+    for (const [received, due, customerCredit] of [["0", "80.00", "0.00"], ["50", "30.00", "0.00"], ["100", "0.00", "20.00"]]) {
+      const invoice = await issued(); if (received !== "0") await paymentService.recordPayment(c, invoice.id, receipt(received));
+      const paymentsBefore = await paymentService.listPayments(c, invoice.id), note = await partial(invoice.id, "20"); await credits().issue(c, note.id);
+      expect(await service.getInvoice(c, invoice.id)).toMatchObject({ amountDue: due, customerCredit, amountCredited: "20.00" });
+      expect(await paymentService.listPayments(c, invoice.id)).toEqual(paymentsBefore);
+      if (received === "0") { await expect(paymentService.recordPayment(c, invoice.id, receipt("81"))).rejects.toMatchObject({ code: "CONFLICT" }); await paymentService.recordPayment(c, invoice.id, receipt("80")); expect(await service.getInvoice(c, invoice.id)).toMatchObject({ status: "paid", amountPaid: "80.00", amountDue: "0.00", amountCredited: "20.00" }); }
+      if (received === "100") { await paymentService.cancelPayment(c, invoice.id, paymentsBefore[0]!.id, { reason: "Erreur de saisie fictive, aucun remboursement" }); expect(await service.getInvoice(c, invoice.id)).toMatchObject({ amountPaid: "0.00", amountDue: "80.00", customerCredit: "0.00", amountCredited: "20.00" }); }
+    }
+  });
+  it("M4 mirrors multiple original VAT rates and consumes their exact remaining rounded tax", async () => {
+    const c = contexts[0]!, draftInvoice = await service.createDraftInvoice(c, draft(customerIds[0]!));
+    for (const rate of ["20", "5.5"]) await service.addInvoiceItem(c, draftInvoice.id, { description: `TVA fictive ${rate}`, quantity: "1", unitPrice: "100", taxRate: rate });
+    const invoice = await service.issueInvoice(c, draftInvoice.id), note = await credits().createDraft(c, creditInput(invoice.id));
+    for (const originalLineIndex of [0,1]) await credits().setItem(c, note.id, { originalLineIndex, subtotal: "20" });
+    expect((await credits().issue(c, note.id)).snapshot).toMatchObject({ totals: { subtotal: "40.00", taxAmount: "5.10", total: "45.10" }, taxes: expect.arrayContaining([{ rate: "20.000", base: "20.00", amount: "4.00" }, { rate: "5.500", base: "20.00", amount: "1.10" }]) });
+    const remaining = await credits().createDraft(c, creditInput(invoice.id, "full")); await credits().issue(c, remaining.id);
+    expect(await service.getInvoice(c, invoice.id)).toMatchObject({ total: "225.50", amountCredited: "225.50", amountDue: "0.00" });
+  });
+  it("M4 protects authenticated exact UUID access, anonymous/technician/inactive reads, and cross-tenant relations", async () => {
+    const pair = await Promise.all([issued(0), issued(1)]), notes = await Promise.all(pair.map((i,n) => partial(i.id, "10", n)));
+    const year = invoiceIssueCalendar(new Date(), "Europe/Paris").fiscalYear;
+    await db.insert(creditNoteNumberCounters).values({ organizationId: orgs[1]!, fiscalYear: year - 1, lastNumber: 42, lastIssuedAt: new Date(`${year-1}-12-30T12:00:00Z`), lastIssueDate: `${year-1}-12-30`, lastCreditNoteId: randomUUID() });
+    for (const n of [0,1]) await credits().issue(contexts[n]!, notes[n]!.id);
+    expect((await credits().getCreditNote(contexts[1]!, notes[1]!.id)).number).toBe(`AV-${year}-000001`);
+    for (const n of [0,1]) {
+      for (const table of ["credit_notes", "credit_note_items"]) {
+        const column = table === "credit_notes" ? "id" : "credit_note_id";
+        const own = await clients[n]!.from(table).select("id").eq(column, notes[n]!.id); expect(own.error).toBeNull(); expect(own.data).toHaveLength(1);
+        const attack = await clients[n]!.from(table).select("id").eq(column, notes[1-n]!.id); expect(attack.error).toBeNull(); expect(attack.data).toEqual([]);
+      }
+      await expect(credits().getDocument(contexts[n]!, notes[1-n]!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(credits().createDraft(contexts[n]!, creditInput(pair[1-n]!.id))).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect((await clients[n]!.rpc("allocate_credit_note_number", { p_org: orgs[n], p_note: notes[n]!.id })).error).not.toBeNull();
+      // RLS has no counter policy: a SELECT is permitted but reveals zero rows.
+      expect((await clients[n]!.from("credit_note_number_counters").select("*")).data).toEqual([]);
+    }
+    expect((await admin.from("credit_notes").select("id").in("id", notes.map(n => n.id))).data).toHaveLength(2);
+    const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, clientOptions);
+    for (const table of ["credit_notes", "credit_note_items"]) expect((await anon.from(table).select("id")).data).toEqual([]);
+    expect((await clients[0]!.from("credit_notes").update({ reason: "Attack" }).eq("id", notes[0]!.id).select("id")).data).toEqual([]);
+    try {
+      for (const patch of [{ role: "TECHNICIAN" as const }, { role: "OWNER" as const, status: "inactive" }, { status: "active", deletedAt: new Date() }]) {
+        await db.update(users).set(patch).where(eq(users.id, userIds[0]!));
+        for (const table of ["credit_notes", "credit_note_items"]) expect((await clients[0]!.from(table).select("id").eq("organization_id", orgs[0]!)).data).toEqual([]);
+        await expect(credits().getDocument(contexts[0]!, notes[0]!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(credits().issue(contexts[0]!, notes[0]!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      }
+      await db.update(users).set({ role: "READ_ONLY", status: "active", deletedAt: null }).where(eq(users.id, userIds[0]!));
+      expect((await clients[0]!.from("credit_notes").select("id").eq("id", notes[0]!.id)).data).toHaveLength(1);
+      await expect(credits().issue(contexts[0]!, notes[0]!.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally { await db.update(users).set({ role: "OWNER", status: "active", deletedAt: null }).where(eq(users.id, userIds[0]!)); }
+    const input = { organizationId: orgs[0]!, originalInvoiceId: pair[0]!.id, createdByUserId: userIds[0]!, reason: "Fictif", correctionType: "partial" };
+    for (const patch of [{ originalInvoiceId: pair[1]!.id }, { createdByUserId: userIds[1]! }]) await expect(db.insert(creditNotes).values({ ...input, ...patch, idempotencyKey: randomUUID() })).rejects.toMatchObject({ cause: { code: "23503" } });
+    const foreignDraft = await credits().createDraft(contexts[1]!, creditInput(pair[1]!.id));
+    await expect(db.insert(creditNoteItems).values({ organizationId: orgs[0]!, originalInvoiceId: pair[1]!.id, creditNoteId: foreignDraft.id, originalLineIndex: 0, subtotal: "1", taxAmount: "0", total: "1" })).rejects.toMatchObject({ cause: { code: "23503" } });
+  });
   async function issued(n = 0, amount = "100") {
     const invoice = await service.createDraftInvoice(contexts[n]!, { ...draft(customerIds[n]!), vatTreatment: "exemption", vatReason: "Motif fictif validé pour ce scénario de test, sans usage fiscal réel" });
     await service.addInvoiceItem(contexts[n]!, invoice.id, { description: "Fictional payment line", quantity: "1", unitPrice: amount, taxRate: "0" });

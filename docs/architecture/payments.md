@@ -31,10 +31,11 @@ Cancelled receipts remain visible but no longer contribute to the balance.
 Record/correction re-read and shared-lock active, non-deleted organization and
 membership/role, then lock the tenant-scoped invoice FOR UPDATE. Completed receipt
 SUM uses PostgreSQL NUMERIC; application arithmetic uses BigInt cents. Reject any
-new receipt exceeding total minus completed payments. Receipt and invoice snapshots
+new receipt exceeding total minus issued credit notes and completed payments. Receipt and invoice snapshots
 commit together or roll back together. This serializes concurrent payments on the
-same invoice, including across processes. Amount_paid + amount_due = total and
-non-negative balances are also checked by PostgreSQL.
+same invoice, including across processes. Since M4, total − amount_credited −
+amount_paid = amount_due − customer_credit, with non-negative/exclusive debt and
+credit, is also checked by PostgreSQL. See [credit notes](credit-notes.md).
 
 The organization/key unique constraint prevents duplicate receipts. A replay with
 the same invoice/amount/method/instant/reference returns the original record, even
@@ -42,7 +43,7 @@ after full settlement or correction; it cannot resurrect a cancelled receipt.
 Different payload/key reuse conflicts. Concurrent reuse on another invoice fails
 safely without inserting a second receipt. References are not assumed globally unique.
 
-Positive received balance below total derives partially_paid; full settlement
+Positive received balance below the net corrected debt derives partially_paid; full settlement
 derives paid with paid_at = latest completed receipt date. Correction clears paid_at
 when no longer settled. If all receipts are cancelled, the invoice returns to issued
 (or preserves sent/overdue if still in that state). No historical pre-payment status
@@ -74,6 +75,11 @@ controls, composite FK rejection, concurrent receipts, replay/mismatched keys, r
 membership/role, correction, overpayment and rollback of receipt + balance. E2E extends
 the mobile invoice flow with partial/final receipts, overpayment rejection and correction.
 Fixtures are fictional and payments are cleaned before parent invoices.
+
+M4 adds invoice-attached customer credit from issued corrections, not an unallocated
+receipt or refund. Existing receipt history is unchanged and receipt cancellation
+recalculates the economic balance with credits. Invoice PDFs show the current dated
+correction/debt/credit section separately from their immutable commercial body.
 
 No fiscal/production compliance claim, reimbursement workflow, unallocated credit,
 full audit, automated overdue transition or banking verification. Payment evidence

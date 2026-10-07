@@ -262,3 +262,18 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   Périmètre domestique ordinaire seulement ; acomptes, exceptions sectorielles et
   clauses publiques exhaustives restent à cadrer. V1/v2/v3 inchangés, M4–M7 distincts.
 - **Sources :** `docs/architecture/invoice-mentions.md`, migration 0016, audit M3.
+
+## ADR-24 — Avoir séparé et allocation cumulative de TVA
+
+- **Statut :** adopté, implémenté M4 ; conformité fiscale globale non établie.
+- **Décision :** correction réductive dédiée, ligne référencée par index du snapshot
+  original immuable (compatible legacy sans UUID item), montants HT positifs et
+  TVA cumulée au prorata de la TVA arrondie originale. Série AV transactionnelle
+  indépendante, issue avec snapshot et solde sous verrou de la facture partagé avec paiements.
+- **Raison :** ne jamais réécrire l’original ni sur-corriger bases/TVA ; distinguer
+  dette corrigée, argent déclaré reçu et crédit client sans simuler un remboursement.
+- **Conséquences :** pas de quantités retournées inventées, de facture de remplacement
+  ni de réallocation crédit inter-factures. Original/snapshot v1–v4 inchangés ; avoir v1.
+  Les avoirs émis/lignes sont protégés SQL ; suppression administrative/archivage
+  et audit complet restent M5. Aucun outil/action IA financier ajouté.
+- **Sources :** `docs/architecture/credit-notes.md`, migrations 0017/0018, audit M4.

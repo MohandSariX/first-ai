@@ -2,7 +2,8 @@
 
 Fondation technique issue de l’[audit français](../compliance/france-invoicing-audit.md),
 pas une certification fiscale. [M3](invoice-mentions.md) étend désormais les nouvelles
-émissions en v4 sans changer les garanties M2. M4–M7 et la qualification M0 restent ouverts.
+émissions en v4 sans changer les garanties M2. [M4](credit-notes.md) réutilise ce
+principe pour une série AV indépendante ; M5–M7 et la qualification M0 restent ouverts.
 La règle de séquence au fil de l’émission et de date est vérifiée dans le
 [BOFiP, §§70–140](https://bofip.impots.gouv.fr/bofip/140-PGP.html/identifiant=BOI-TVA-DECLA-30-20-20-10-20131018).
 L’organisation représente un émetteur dans ce modèle ; import, multi-émetteurs et

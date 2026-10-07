@@ -10,3 +10,4 @@ export * from "./invoice-tools.js";
 export * from "./payment-service.js";
 export * from "./invoice-document.js";
 export * from "./billing-service.js";
+export * from "./credit-note-service.js";

@@ -1,15 +1,18 @@
 # Invoice Document / PDF Foundation
 
 Fondation technique, **pas une validation fiscale ni une autorisation d’usage
-production**. Aucun email, PDF distant, stockage objet, réseau de facturation,
-avoir ou opération bancaire introduit.
+production**. Aucun email, PDF distant, stockage objet, réseau de facturation
+ou opération bancaire introduit. Les avoirs disposent désormais d’un domaine/PDF
+séparé : [M4](credit-notes.md).
 
 La version 1 décrite ci-dessous est historique. Les nouvelles émissions utilisent
 désormais le snapshot v4 : [mentions/dates métier M3](invoice-mentions.md), [identités/classifications M1](billing-identities.md)
 et [numéro/date d’émission M2](invoice-numbering.md).
 Les profils vendeur/client ont leurs champs structurés et UI dédiées ; l’adresse
 client n’est plus absente sur les nouvelles factures correctement configurées.
-Les anciens snapshots v1/v2/v3 restent inchangés. Les limites M4–M7 et les cas non couverts M3 restent applicables.
+Les anciens snapshots v1/v2/v3 restent inchangés. M4 ne les réécrit pas : seul l’encart
+de solde courant affiche avoirs/dette/crédit client. Les limites M5–M7 et les cas non
+couverts M3/M4 restent applicables.
 
 ## Document commercial immuable
 
@@ -103,6 +106,6 @@ organisation refusé. Fixtures fictives nettoyées ; vérification visuelle sép
 
 L’audit français est terminé ; M1 livre les identités/adresses et M2 le cycle
 numéro/date, sans certification globale. M3 livre des mentions/dates domestiques ordinaires ; restent ses exceptions,
-annulation/avoirs M4, rétention/audit M5, Unicode M6 et intégration électronique M7.
+rectificatifs de remplacement/majoration, rétention/audit M5, Unicode M6 et intégration électronique M7.
 Qualification des flux, séries et obligations applicables reste nécessaire avant
 production. Ce PDF technique ne prétend pas satisfaire toutes ces exigences.

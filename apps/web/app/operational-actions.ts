@@ -15,8 +15,18 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
     const input = parseOperationalForm(operation, form);
     const quoteId = formText(form, "quoteId"), jobId = formText(form, "jobId");
     const invoiceId = formText(form, "invoiceId");
-    await withCrm(async ({ context, quotes, jobs, reports, invoices, payments, billing }) => {
+    const creditNoteId = formText(form, "creditNoteId");
+    await withCrm(async ({ context, quotes, jobs, reports, invoices, payments, billing, creditNotes }) => {
       switch (operation) {
+        case "credit.create": destination = `/credit-notes/${(await creditNotes.createDraft(context, input)).id}`; break;
+        case "credit.setItem": await creditNotes.setItem(context, creditNoteId, input); break;
+        case "credit.removeItem": await creditNotes.removeItem(context, creditNoteId, Number(formText(form, "originalLineIndex"))); break;
+        case "credit.cancel": await creditNotes.cancel(context, creditNoteId); break;
+        case "credit.issue": {
+          if (form.get("confirmed") !== "on") throw new z.ZodError([{ code: "custom", path: ["confirmed"], message: "Confirmez l’émission définitive de l’avoir." }]);
+          const issued = await creditNotes.issue(context, creditNoteId);
+          revalidatePath(`/invoices/${issued.originalInvoiceId}`); break;
+        }
         case "billing.terms": await billing.updateInvoiceTerms(context, input); break;
         case "invoice.business": await invoices.updateBusinessDetails(context, invoiceId, input); break;
         case "billing.seller": await billing.updateSeller(context, input); break;
@@ -56,6 +66,8 @@ export async function operationalAction(_state: ActionState, form: FormData): Pr
         case "report.complete": await reports.completeJobReport(context, jobId); break;
       }
     });
+    revalidatePath("/credit-notes");
+    if (creditNoteId) revalidatePath(`/credit-notes/${creditNoteId}`);
     for (const path of ["/settings/billing", "/customers", ...(formText(form, "customerId") ? [`/customers/${formText(form, "customerId")}`] : []), "/invoices", ...(invoiceId ? [`/invoices/${invoiceId}`] : []), "/quotes", "/jobs", "/dashboard", ...(quoteId ? [`/quotes/${quoteId}`] : []), ...(jobId ? [`/jobs/${jobId}`] : [])]) revalidatePath(path);
   } catch (error) {
     if (error instanceof z.ZodError) return { success: false, message: "Vérifiez les champs indiqués.", fieldErrors: error.flatten().fieldErrors };

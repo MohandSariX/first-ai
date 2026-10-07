@@ -4,6 +4,7 @@ import { cancelPaymentSchema, listPaymentsSchema, recordPaymentSchema, type Reco
 import { z } from "zod";
 import { AuthorizationError, ResourceNotFoundError } from "./crm-services.js";
 import { OperationalConflictError } from "./operational-policies.js";
+import { deriveCorrectedBalance } from "./invoice-balance.js";
 
 export function paymentCents(value: string): bigint {
   if (!/^\d{1,12}(\.\d{1,2})?$/.test(value)) throw new OperationalConflictError("Montant décimal invalide.");
@@ -33,7 +34,7 @@ export class PaymentService {
     authorize({ ...c, role: membership.role }, "payments.write");
   }
   private async synchronize(s: PaymentSession, sc: InvoiceScope, invoice: Invoice) {
-    const summary = await s.payments.summary(sc), balance = deriveInvoiceBalance(invoice.total, summary.amount, invoice.status);
+    const summary = await s.payments.summary(sc), balance = deriveCorrectedBalance(invoice.total, summary.amount, await s.creditSummary(sc), invoice.status);
     return found(await s.invoices.update(sc, { ...balance, paidAt: balance.status === "paid" ? summary.paidAt : null }));
   }
   async recordPayment(c: CurrentBusinessUser, invoiceId: string, input: unknown) {
@@ -46,7 +47,7 @@ export class PaymentService {
       if (existing) { if (!sameReceipt(existing, invoiceId, parsed)) throw new OperationalConflictError("Cette clé correspond à un autre encaissement."); return { payment: existing, invoice }; }
       if (!["issued", "sent", "overdue", "partially_paid"].includes(invoice.status)) throw new OperationalConflictError("Seule une facture émise avec un solde peut recevoir un paiement.");
       const summary = await s.payments.summary(sc);
-      deriveInvoiceBalance(invoice.total, money(paymentCents(summary.amount) + paymentCents(parsed.amount)), invoice.status);
+      if (paymentCents(summary.amount) + paymentCents(parsed.amount) > paymentCents(invoice.total) - paymentCents(await s.creditSummary(sc))) throw new OperationalConflictError("Le paiement dépasse le solde restant après avoirs.");
       const payment = await s.payments.create({ ...parsed, paidAt: new Date(parsed.paidAt), ...sc, customerId: invoice.customerId, createdByUserId: c.userId });
       if (!payment) throw new OperationalConflictError("Cette clé correspond à un autre encaissement concurrent.");
       return { payment, invoice: await this.synchronize(s, sc, invoice) };
