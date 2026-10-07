@@ -215,7 +215,7 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   évoluent indépendamment, avec une source structurée et un solde cohérent.
 - **Conséquences :** aucun backfill des factures historiques ; vendeur incomplet
   bloque l’émission. Adresse client absente explicitement signalée, pas substituée
-  par un site. PDF français WinAnsi, refus de glyphes incompatibles. Conformité fiscale,
+  par un site. PDF Unicode embarqué depuis M6 (ADR-27), refus de glyphes incompatibles. Conformité fiscale,
   rectificatifs complémentaires, rétention de production et e-invoicing restent différés ;
   avoirs M4 et audit financier M5A étendent ce socle. Identités/adresses
   client et configuration vendeur sont désormais étendues par ADR-21, sans backfill.
@@ -313,3 +313,17 @@ choix architectural change ou qu'un nouveau choix est explicitement établi.
   Stockage/backup/restore durables, exercices atypiques, contrôle propriétaire et WORM
   ne sont pas certifiés ni fournis par ce socle local. Adapter remplaçable ultérieurement.
 - **Sources :** `docs/architecture/financial-retention.md`, migration 0021.
+
+## ADR-27 — Fontes Unicode locales partagées et renderer financier versionné
+
+- **Statut :** adopté, implémenté M6 ; pas de certification fiscale/PDF/A.
+- **Décision :** PDFKit avec Noto Sans Regular/Bold OFL 1.1 embarquées uniquement
+  serveur, paths fixes, couverture vérifiée ; pas de fallback système/réseau ou `?`.
+  Glyphes absents refusés explicitement ; version renderer incrémentée pour nouvelles
+  émissions, originaux antérieurs jamais régénérés. Reconstruction legacy reste déclarée.
+- **Raison :** accepter des identités françaises/européennes hors WinAnsi sans
+  dépendance runtime externe ni altération silencieuse des documents conservés.
+- **Conséquences :** seulement deux fontes, couverture non universelle ; vérifier
+  l’adapter privé Fontkit lors d’un upgrade PDFKit. Fontes/renderer différents donnent
+  de nouveaux bytes/hashes, pas une mise à jour des originaux. Aucune migration.
+- **Sources :** `docs/architecture/pdf-unicode.md`, `packages/tools/assets/fonts/OFL.txt`.

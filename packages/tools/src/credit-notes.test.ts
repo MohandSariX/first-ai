@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inflateSync } from "node:zlib";
+import { renderedPdfText as text } from "./test-pdf-text.js";
 import { writeFile } from "node:fs/promises";
 import { hasPermission } from "@first-ai/auth";
 import { creditNoteNumber } from "@first-ai/database";
@@ -12,15 +12,6 @@ function original() {
   const identity = { name: "Société Fictive", legalName: "Société Fictive Test", addressLine1: "1 Rue Fictive", addressLine2: null, postalCode: "75001", city: "Paris", country: "FR", siret: null, vatNumber: null, email: null, phone: null };
   return invoiceDocumentSnapshotSchema.parse({ version: 1, organizationId: org, invoiceId: invoice, capturedAt: "2026-10-01T12:00:00Z", currency: "EUR", seller: identity, customer: { ...identity, name: "Client Fictif", legalName: null }, invoice: { number: "FAC-2026-000001", issueDate: "2026-10-01", dueDate: "2026-11-05", status: "issued", notes: null },
     lines: [{ description: "Service fictif A", quantity: "1.000", unitPrice: "100.00", taxRate: "20.000", subtotal: "100.00", taxAmount: "20.00", total: "120.00" }, { description: "Service fictif B", quantity: "1.000", unitPrice: "100.00", taxRate: "5.500", subtotal: "100.00", taxAmount: "5.50", total: "105.50" }], totals: { subtotal: "200.00", taxAmount: "25.50", total: "225.50" }, taxes: [{ rate: "20.000", base: "100.00", amount: "20.00" }, { rate: "5.500", base: "100.00", amount: "5.50" }] });
-}
-function text(pdf: Buffer) {
-  let result = "";
-  for (const m of pdf.toString("latin1").matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
-    const content = inflateSync(Buffer.from(m[1]!, "latin1")).toString("latin1");
-    const ansi = "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";
-    for (const op of content.matchAll(/<([a-f\d]+)>/gi)) result += [...Buffer.from(op[1]!, "hex")].map(b => b >= 128 && b <= 159 ? ansi[b - 128] : String.fromCharCode(b)).join("");
-  }
-  return result;
 }
 describe("M4 deterministic credit notes", () => {
   it("allocates mixed-rate corrections from original immutable VAT bases", () => {
@@ -75,5 +66,26 @@ describe("M4 deterministic credit notes", () => {
     if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-credit-note-qa.pdf", bytes);
     expect(creditNoteSnapshotSchema.safeParse({ ...snapshot, organizationId: invoice }).success).toBe(false);
     expect(creditNoteSnapshotSchema.safeParse({ ...snapshot, taxes: [{ rate: "20.000", base: "30.00", amount: "4.55" }] }).success).toBe(false);
+  });
+  it("M6 renders Unicode identity/reason and paginates without losing corrected lines", async () => {
+    const source = original();
+    source.seller.legalName = "Société fictive Élodie — Œuvre";
+    source.customer.name = "Client fictif Łukasz Žák-Ștefan";
+    const reason = "Révision fictive : É, è, ê, à, ç, œ – « Łódź » €";
+    const calculation = calculateCreditLines(source, [{ originalLineIndex: 0, subtotal: "20" }], []);
+    const snapshot = creditNoteSnapshotSchema.parse({ version: 1, organizationId: org, creditNoteId: note, number: "AV-2026-000001", issueDate: "2026-10-06", issuedAt: "2026-10-06T12:00:00Z", timeZone: "Europe/Paris", fiscalYear: 2026, reason, correctionType: "partial", originalInvoice: source, ...calculation });
+    const bytes = await generateCreditNotePdf(snapshot), rendered = text(bytes);
+    for (const value of [reason, source.seller.legalName, source.customer.name, "FAC-2026-000001", "24,00 €"]) expect(rendered).toContain(value);
+    expect(rendered).not.toContain("\uFFFD"); expect(bytes.toString("latin1")).toContain("/FontFile2");
+    expect(await generateCreditNotePdf(snapshot)).toEqual(bytes);
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-credit-note-unicode-m6-qa.pdf", bytes);
+    snapshot.lines[0]!.description = "Description fictive étendue Łódź. ".repeat(60) + "FIN-CORRECTION";
+    snapshot.originalInvoice.lines[0]!.description = snapshot.lines[0]!.description;
+    const long = await generateCreditNotePdf(snapshot);
+    expect(text(long)).toContain("FIN-CORRECTION"); expect(text(long)).toContain("TOTAL TTC À DÉDUIRE : 24,00 €");
+    expect((long.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(1);
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-credit-note-long-m6-qa.pdf", long);
+    snapshot.reason = "Correction fictive 客户";
+    await expect(generateCreditNotePdf(snapshot)).rejects.toThrow("U+5BA2");
   });
 });

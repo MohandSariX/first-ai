@@ -44,10 +44,14 @@ Une entrée prévue n'est ni une fonctionnalité existante ni une autorisation d
 - M5B politique de clôture/conservation explicite, originaux PDF immuables avec SHA-256,
   stockage local contrôlé remplaçable, export JSON/manifest borné et vérification sans restore.
   Historique sans faux original ; pas de stockage certifié ni de DR production.
+- M6 PDF Unicode facture/avoir : Noto Sans locales Regular/Bold sous OFL 1.1,
+  Latin Extended/ponctuation testés, refus explicite hors couverture ; renderer versionné,
+  originaux historiques inchangés, pagination et téléchargement local vérifiés.
 
 ## CURRENT
 
-M5B : fondation technique livrée ; prochain chantier M6, sur mission explicite.
+M6 : fondation technique livrée ; prochain chantier M7 selon qualification/applicabilité,
+sur mission explicite.
 Conformité non établie.
 Spécialistes toujours supervisés et Director read-only. Aucun mouvement bancaire,
 envoi, rapprochement ou élargissement du registre IA dans ce jalon.
@@ -64,7 +68,7 @@ envoi, rapprochement ou élargissement du registre IA dans ce jalon.
   5. M4 livré : avoirs réductifs ; remplacement/majoration et cas fiscaux exceptionnels à cadrer.
   6. M5A/M5B livrés techniquement : audit/immutabilité, rétention/original et export
      vérifiable ; stockage durable, contrôle administratif/backup/restore production
-     restent à cadrer séparément. M6 PDF Unicode.
+     restent à cadrer séparément. M6 Unicode livré avec couverture bornée.
   7. M7 : intégration plateforme/e-reporting dédiée, à prioriser séparément si
      émission/reporting déjà exigibles ; un PDF ordinaire n’est pas ce flux.
 - Cadrer facturation partielle/source sans présumer une seule facture par quote/job.

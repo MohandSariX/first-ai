@@ -15,6 +15,9 @@ import { CreditNoteService } from "./credit-note-service.js";
 import { FinancialAuditService } from "./financial-audit-service.js";
 import { FinancialRetentionService } from "./financial-retention-service.js";
 import { financialArtifacts, financialArchiveExports, financialRetentionPolicies } from "@first-ai/database";
+import { FINANCIAL_RENDERER_VERSION } from "./financial-artifacts.js";
+import { financialHash } from "./financial-storage.js";
+import { renderedPdfText } from "./test-pdf-text.js";
 
 describe("local invoice foundation", () => {
   const orgs = [randomUUID(), randomUUID()], customerIds = [randomUUID(), randomUUID()], userIds = [randomUUID(), randomUUID()], authIds: string[] = [];
@@ -750,6 +753,45 @@ describe("local invoice foundation", () => {
     const creditOriginal=(await retention.original(c,"credit_note",issuedNote.id))!;
     expect(creditOriginal.bytes.subarray(0,5).toString()).toBe("%PDF-"); expect(creditOriginal.artifact.documentNumber).toBe(issuedNote.number);
     await credits().issue(c,note.id); expect((await retention.original(c,"credit_note",note.id))!.bytes).toEqual(creditOriginal.bytes);
+  });
+  it("M6 issues Unicode originals with versioned hashes and never re-renders preserved originals", async () => {
+    const c = contexts[0]!, retention = new FinancialRetentionService(store);
+    const [seller] = await db.select().from(organizations).where(eq(organizations.id, c.organizationId));
+    const [buyer] = await db.select().from(customers).where(eq(customers.id, customerIds[0]!));
+    try {
+      await db.update(organizations).set({ legalName: "Vendeur Fictif Élodie — Œuvre" }).where(eq(organizations.id, c.organizationId));
+      await db.update(customers).set({ billingLegalName: "Client Fictif Łukasz Žák-Ștefan", billingCity: "Łódź" }).where(eq(customers.id, customerIds[0]!));
+      const draftInvoice = await service.createDraftInvoice(c, draft(customerIds[0]!));
+      await service.addInvoiceItem(c, draftInvoice.id, { description: "Prestation fictive É, è, ê, à, ç, œ", quantity: "1", unitPrice: "100", taxRate: "20" });
+      const invoice = await service.issueInvoice(c, draftInvoice.id);
+      const original = (await retention.original(c, "invoice", invoice.id))!;
+      expect(original.artifact.rendererVersion).toBe(FINANCIAL_RENDERER_VERSION);
+      expect(original.artifact.sha256).toBe(financialHash(original.bytes));
+      for (const value of ["Vendeur Fictif Élodie — Œuvre", "Client Fictif Łukasz Žák-Ștefan", "Łódź", "Prestation fictive É, è, ê, à, ç, œ", invoice.invoiceNumber!]) expect(renderedPdfText(original.bytes)).toContain(value);
+      const cs = credits(), note = await cs.createDraft(c, { originalInvoiceId: invoice.id, correctionType: "partial", reason: "Correction fictive à Łódź – œ", idempotencyKey: randomUUID() });
+      await cs.setItem(c, note.id, { originalLineIndex: 0, subtotal: "20" });
+      await cs.issue(c, note.id);
+      const credit = (await retention.original(c, "credit_note", note.id))!;
+      expect(credit.artifact.rendererVersion).toBe(FINANCIAL_RENDERER_VERSION);
+      expect(credit.artifact.sha256).toBe(financialHash(credit.bytes));
+      expect(renderedPdfText(credit.bytes)).toContain("Correction fictive à Łódź – œ");
+      // Unsupported live identities cannot trigger regeneration on issued retries.
+      await db.update(organizations).set({ legalName: "Vendeur Fictif 客户" }).where(eq(organizations.id, c.organizationId));
+      await service.issueInvoice(c, invoice.id); await cs.issue(c, note.id);
+      expect((await retention.original(c, "invoice", invoice.id))!.bytes).toEqual(original.bytes);
+      expect((await retention.original(c, "credit_note", note.id))!.bytes).toEqual(credit.bytes);
+      const blocked = await service.createDraftInvoice(c, draft(customerIds[0]!));
+      await service.addInvoiceItem(c, blocked.id, { description: "Prestation fictive hors couverture", quantity: "1", unitPrice: "10", taxRate: "20" });
+      const counter = await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId));
+      await expect(service.issueInvoice(c, blocked.id)).rejects.toThrow("U+5BA2");
+      expect(await service.getInvoice(c, blocked.id)).toMatchObject({ status: "draft", invoiceNumber: null, documentSnapshot: null });
+      expect(await eventsFor(blocked.id)).toEqual([]);
+      expect(await retention.original(c, "invoice", blocked.id)).toBeUndefined();
+      expect(await db.select().from(invoiceNumberCounters).where(eq(invoiceNumberCounters.organizationId, c.organizationId))).toEqual(counter);
+    } finally {
+      await db.update(organizations).set({ legalName: seller!.legalName }).where(eq(organizations.id, c.organizationId));
+      await db.update(customers).set({ billingLegalName: buyer!.billingLegalName, billingCity: buyer!.billingCity }).where(eq(customers.id, customerIds[0]!));
+    }
   });
   it("M5B rejects storage failure atomically without consuming fiscal number or committing artifacts/audit", async () => {
     const c=contexts[0]!, inv=await service.createDraftInvoice(c,draft(customerIds[0]!)); await service.addInvoiceItem(c,inv.id,{description:"Fictional storage failure",quantity:"1",unitPrice:"10",taxRate:"20"});

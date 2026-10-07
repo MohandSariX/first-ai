@@ -75,9 +75,9 @@ capture du snapshot ; dernière modification de la copie dynamique = invoice.upd
 HT/TVA/TTC et ventilation par taux viennent du snapshot, avec arrondis au centime
 par ligne identiques à la facture. Format EUR par chaînes, sans arithmétique
 monétaire flottante. 1–200 lignes, textes/pages/bytes bornés, descriptions/notes
-paginées sans troncature. WinAnsi couvre le français ; les caractères non pris
-en charge provoquent un refus explicite plutôt qu’un nom corrompu. Polices
-Unicode embarquées différées.
+paginées sans troncature. [M6](pdf-unicode.md) utilise Noto Sans Regular/Bold
+Unicode embarquées (OFL 1.1) ; Latin Extended/français et ponctuation testés,
+glyphes absents refusés explicitement sans corruption d’identité. Pas de couverture universelle.
 
 L’encart « Situation des encaissements — actualisée » est **dynamique** : statut,
 montant enregistré et reste dû du même row facture cohérent, dérivés par
@@ -110,6 +110,6 @@ organisation refusé. Fixtures fictives nettoyées ; vérification visuelle sép
 L’audit français est terminé ; M1 livre les identités/adresses et M2 le cycle
 numéro/date, sans certification globale. M3 livre des mentions/dates domestiques ordinaires ; restent ses exceptions,
 rectificatifs de remplacement/majoration, garanties de stockage/audit de production
-au-delà du socle M5A/M5B, Unicode M6 et intégration électronique M7.
+au-delà du socle M5A/M5B et intégration électronique M7. Unicode M6 est livré techniquement.
 Qualification des flux, séries et obligations applicables reste nécessaire avant
 production. Ce PDF technique ne prétend pas satisfaire toutes ces exigences.

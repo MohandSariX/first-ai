@@ -12,7 +12,9 @@ const nextConfig: NextConfig = {
     "@first-ai/tools",
     "@first-ai/ui",
   ],
-  webpack(config) {
+  webpack(config, { isServer }) {
+    // Fixed PDF fonts are embedded into server chunks, never published to /_next.
+    if (isServer) config.module.rules.push({ test: /[\\/]tools[\\/]assets[\\/]fonts[\\/]NotoSans-(Regular|Bold)\.ttf$/, type: "asset", parser: { dataUrlCondition: { maxSize: 2 * 1024 * 1024 } } });
     config.resolve.extensionAlias = {
       ".js": [".ts", ".tsx", ".js"],
       ".jsx": [".tsx", ".jsx"],

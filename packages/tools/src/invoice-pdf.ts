@@ -1,9 +1,10 @@
-// Node-only rendering entry point; no filesystem paths, HTML, network or AI input.
+// Node-only rendering entry point; no caller-provided paths, HTML, network or AI input.
 import PDFDocument from "pdfkit";
 import { invoiceDocumentSnapshotSchema } from "@first-ai/schemas";
 import { invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
 import { OperationalConflictError } from "./operational-policies.js";
 import { financialCents } from "./invoice-balance.js";
+import { PDF_FONT_REGULAR, registerPdfFonts, safePdfText } from "./pdf-fonts.js";
 
 export function formatDocumentMoney(value: string): string {
   if (!/^\d+\.\d{2}$/.test(value)) throw new OperationalConflictError("Montant de document invalide.");
@@ -19,11 +20,6 @@ export async function generateInvoicePdf(view: InvoiceDocumentView, options: { o
   const available = invoiceDocumentAvailability(snapshot);
   if (!available.available) throw new OperationalConflictError(available.message ?? "Document indisponible.");
   if (financialCents(snapshot.totals.total) - financialCents(view.payment.amountCredited ?? "0") - financialCents(view.payment.amountPaid) !== financialCents(view.payment.amountDue) - financialCents(view.payment.customerCredit ?? "0")) throw new OperationalConflictError("Solde du document incohérent.");
-  // Built-in WinAnsi fonts cover French. Reject unsupported glyphs instead of silently corrupting names.
-  const safeText = (text: string) => {
-    if (/[^\x20-\x7e\xa0-\xff\n\r\t€œŒŠšŸŽž•–—‘’‚“”„…†‡‰‹›™]/u.test(text)) throw new OperationalConflictError("Le PDF v1 ne prend pas encore en charge certains caractères. Aucun document altéré ne sera généré.");
-    return text.replace(/\r\n?/g, "\n").replace(/\t/g, "    ");
-  };
   const doc = new PDFDocument({ size: "A4", margin: 42, bufferPages: true, compress: true,
     info: { Title: `FACTURE ${snapshot.invoice.number}`, Author: snapshot.seller.legalName || snapshot.seller.name,
       CreationDate: new Date(snapshot.capturedAt), ModDate: new Date(options.original ? snapshot.capturedAt : view.payment.asOf) } });
@@ -37,8 +33,8 @@ export async function generateInvoicePdf(view: InvoiceDocumentView, options: { o
   let y = 42, pages = 1;
   const width = 511;
   const text = (value: string, x: number, top: number, fontSize = 10, w = width, bold = false) => {
-    const clean = safeText(value);
-    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize);
+    const clean = safePdfText(doc, value, bold);
+    doc.fontSize(fontSize);
     while (doc.widthOfString(clean) > w && fontSize > 6) doc.fontSize(--fontSize);
     doc.fillColor("#202020").text(clean, x, top, { width: w, lineBreak: false });
   };
@@ -49,9 +45,9 @@ export async function generateInvoicePdf(view: InvoiceDocumentView, options: { o
   const ensure = (height: number) => { if (y + height > 780) newPage(); };
   // Wrap explicitly, including long words, so rows/notes never overflow page or column bounds.
   const wrap = (value: string, w: number, fontSize = 10): string[] => {
-    doc.font("Helvetica").fontSize(fontSize);
+    doc.font(PDF_FONT_REGULAR).fontSize(fontSize);
     const lines: string[] = [];
-    for (const paragraph of safeText(value).split("\n")) {
+    for (const paragraph of safePdfText(doc, value).split("\n")) {
       let line = "";
       for (const character of paragraph) {
         if (doc.widthOfString(line + character) > w && line) {
@@ -68,6 +64,7 @@ export async function generateInvoicePdf(view: InvoiceDocumentView, options: { o
   const paragraph = (value: string, bold = false) => { for (const line of wrap(value, width)) { ensure(15); text(line, 42, y, 10, width, bold); y += 15; } y += 7; };
   const heading = (value: string) => { ensure(34); text(value, 42, y, 12, width, true); y += 25; };
   try {
+    registerPdfFonts(doc);
     text("FIRST AI", 42, y, 11); text("FACTURE", 365, y, 24, 188, true); y += 43;
     paragraph(snapshot.invoice.number, true);
     paragraph(`Émission : ${date(snapshot.invoice.issueDate)}   |   Échéance : ${date(snapshot.invoice.dueDate)}`);
@@ -148,7 +145,13 @@ export async function generateInvoicePdf(view: InvoiceDocumentView, options: { o
     paragraph(`Situation enregistrée le ${date(view.payment.asOf)}. Saisies manuelles déclaratives, sans vérification bancaire. Cet encart peut évoluer ; les lignes et montants émis restent inchangés.`);
     }
     const range = doc.bufferedPageRange();
-    for (let n = 0; n < range.count; n++) { doc.switchToPage(n); text(`${snapshot.invoice.number}  |  ${n + 1} / ${range.count}`, 42, 790, 8); }
+    // Explicit footer box avoids PDFKit auto-pagination when embedded-font metrics
+    // extend below the body margin; preserve the existing footer position.
+    for (let n = 0; n < range.count; n++) {
+      doc.switchToPage(n);
+      const footer = safePdfText(doc, `${snapshot.invoice.number}  |  ${n + 1} / ${range.count}`);
+      doc.fontSize(8).text(footer, 42, 790, { width, height: 20, lineBreak: false });
+    }
     doc.end();
     return await finished;
   } catch (error) { doc.destroy(); throw error; }

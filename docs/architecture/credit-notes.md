@@ -102,7 +102,8 @@ PDFKit existant, serveur Node, à la demande, sans dépendance supplémentaire,
 stockage objet, HTML, filesystem fourni par l’utilisateur ou IA. Titre **AVOIR**,
 AV/date, FAC/date originale, identités, références M3 pertinentes, motif et montants
 positifs « à déduire ». Avertissement de conformité non validée et absence de
-remboursement. Limites WinAnsi, 200 pages/20 Mo ; Unicode reste M6.
+remboursement. Limites 200 pages/20 Mo ; [Unicode M6](pdf-unicode.md) utilise les
+fontes Noto Sans locales partagées avec la facture, avec refus explicite hors couverture.
 Le PDF facture conserve son corps original ; seul son encart courant/daté présente
 encaissements, avoirs, reste dû/crédit client et statut déclaratif non vérifié par banque.
 
@@ -129,7 +130,8 @@ E2E local : facture émise → avoir partiel → AV → solde net → PDF, révo
 rôle/membership, READ_ONLY et viewport 390 px. Fixtures fictives nettoyées : avoirs
 avant paiements/factures, lignes par cascade du parent ; counters par organisation.
 
-M5 : piste d’audit, original délivré, rétention/purge/restauration ; M6 : Unicode ;
+M5A/M5B : piste d’audit, original délivré, fondation de rétention/export ; M6 Unicode livré.
+Stockage/backup/restore durables de production restent à cadrer ;
 M7 : plateforme/e-reporting. Aucun remboursement, envoi, agent Billing ou correction
 fiscale automatique. Validation des scénarios par l’émetteur/conseil reste requise.
 

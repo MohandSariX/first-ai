@@ -20,7 +20,7 @@ test("M4 partial credit note, immutable invoice, corrected debt and secure AVOIR
   await expect(classification.getByRole("status")).toHaveText("Modification enregistrée."); await confirmInvoiceBusiness(page);
   await page.getByLabel("Je confirme l’émission et le verrouillage des lignes").check(); await page.getByRole("button", { name: "Émettre la facture" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^FAC-/); const fiscalNumber = await page.getByRole("heading", { level: 1 }).innerText();
-  await page.getByText("Créer un avoir", { exact: true }).click(); await page.getByLabel("Correction", { exact: true }).selectOption("partial"); await page.getByLabel("Motif de correction").fill("Réduction tarifaire fictive M4"); await page.getByRole("button", { name: "Créer le brouillon d’avoir" }).click();
+  await page.getByText("Créer un avoir", { exact: true }).click(); await page.getByLabel("Correction", { exact: true }).selectOption("partial"); await page.getByLabel("Motif de correction").fill("Réduction fictive Élodie à Łódź – œ"); await page.getByRole("button", { name: "Créer le brouillon d’avoir" }).click();
   await expect(page).toHaveURL(/\/credit-notes\/[0-9a-f-]{36}$/); const id = page.url().split("/").at(-1)!;
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^BROUILLON-/);
   await page.getByLabel("Ligne originale", { exact: true }).selectOption("0"); await page.getByLabel("Montant HT à corriger (€)").fill("20"); await page.getByRole("button", { name: "Enregistrer la correction" }).click();

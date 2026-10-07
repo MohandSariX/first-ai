@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inflateSync } from "node:zlib";
+import { renderedPdfText as renderedText } from "./test-pdf-text.js";
 import { writeFile } from "node:fs/promises";
 import { invoiceDocumentSnapshotSchema } from "@first-ai/schemas";
 import { invoiceDocumentAvailability, type InvoiceDocumentView } from "./invoice-document.js";
@@ -20,18 +20,24 @@ function fixture(): InvoiceDocumentView {
     }), payment: { status: "partially_paid", amountPaid: "100.00", amountDue: "125.50", asOf: "2026-10-06T12:00:00Z" },
   };
 }
-// Extract plain text operands from PDFKit's actual compressed WinAnsi content streams.
-// No pixel snapshots, external APIs or running database required.
-function renderedText(pdf: Buffer): string {
-  const raw = pdf.toString("latin1"); let result = "";
-  for (const match of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
-    const content = inflateSync(Buffer.from(match[1]!, "latin1")).toString("latin1");
-    const winAnsi = "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";
-    for (const operand of content.matchAll(/<([a-f\d]+)>/gi)) result += [...Buffer.from(operand[1]!, "hex")].map(b => b >= 128 && b <= 159 ? winAnsi[b - 128] : String.fromCharCode(b)).join("");
-  }
-  return result;
-}
 describe("invoice documents", () => {
+  it("M6 embeds Unicode fonts, preserves European identities and fails closed outside coverage", async () => {
+    const view = fixture();
+    view.snapshot.seller.legalName = "Société fictive Élodie — Œuvre";
+    view.snapshot.customer.name = "Client fictif Łukasz Žák-Ștefan";
+    view.snapshot.customer.city = "Łódź";
+    view.snapshot.lines[0]!.description = "É, è, ê, à, ç, œ – « prestation fictive » €";
+    const bytes = await generateInvoicePdf(view), text = renderedText(bytes);
+    for (const expected of [view.snapshot.seller.legalName, view.snapshot.customer.name, "Łódź", view.snapshot.lines[0]!.description]) expect(text).toContain(expected);
+    expect(text).not.toContain("\uFFFD");
+    expect((bytes.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length).toBe(1);
+    expect(text).toContain("FAC-2026-000001  |  1 / 1");
+    expect(bytes.toString("latin1")).toContain("/FontFile2");
+    expect(await generateInvoicePdf(view)).toEqual(bytes);
+    if (process.env.FIRST_AI_PDF_QA === "true") await writeFile("/private/tmp/first-ai-invoice-unicode-m6-qa.pdf", bytes);
+    view.snapshot.customer.name = "Client fictif 😀";
+    await expect(generateInvoicePdf(view)).rejects.toThrow("U+1F600");
+  });
   it("M5B original PDF omits dynamic receipts and is byte-identical after payments change", async () => {
     const view = fixture(), original = await generateInvoicePdf(view, { original: true });
     expect(original.subarray(0,5).toString()).toBe("%PDF-"); expect(renderedText(original)).toContain("FAC-2026-000001");

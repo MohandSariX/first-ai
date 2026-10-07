@@ -1,9 +1,10 @@
-// Server-only Node renderer; trusted immutable DTO, no HTML, filesystem path, remote service or AI.
+// Server-only Node renderer; trusted immutable DTO, no HTML, caller-provided path, remote service or AI.
 import PDFDocument from "pdfkit";
 import { creditNoteSnapshotSchema, type CreditNoteSnapshot } from "@first-ai/schemas";
 import { formatDocumentMoney } from "./invoice-pdf.js";
 import { invoiceDocumentAvailability } from "./invoice-document.js";
 import { OperationalConflictError } from "./operational-policies.js";
+import { PDF_FONT_REGULAR, PDF_FONT_BOLD, registerPdfFonts, safePdfText } from "./pdf-fonts.js";
 const date = (v: string) => v.split("-").reverse().join("/");
 export async function generateCreditNotePdf(input: CreditNoteSnapshot): Promise<Buffer> {
   const s = creditNoteSnapshotSchema.parse(input), original = s.originalInvoice;
@@ -12,12 +13,13 @@ export async function generateCreditNotePdf(input: CreditNoteSnapshot): Promise<
   const chunks: Buffer[] = []; let bytes = 0, y = 42, page = 1;
   const done = new Promise<Buffer>((resolve,reject) => { doc.on("data", (chunk: Buffer) => { bytes += chunk.length; if (bytes > 20 * 1024 * 1024) doc.destroy(new Error("PDF size limit exceeded")); else chunks.push(chunk); }); doc.on("end", () => resolve(Buffer.concat(chunks))); doc.on("error", reject); }); void done.catch(() => undefined);
   const paragraph = (text: string, bold = false, size = 10) => {
-    if (/[^\x20-\x7e\xa0-\xff\n\r\t€œŒŠšŸŽž•–—‘’‚“”„…†‡‰‹›™]/u.test(text)) throw new OperationalConflictError("Caractères PDF non pris en charge avant le jalon Unicode.");
-    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(size);
-    const draw = (line: string) => { if (y > 765) { if (++page > 200) throw new OperationalConflictError("Document trop volumineux."); doc.addPage(); y = 42; doc.font("Helvetica-Bold").fontSize(10).text(`AVOIR ${s.number} - suite`, 42,y); y += 28; doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(size); } doc.text(line,42,y,{ width: 511,lineBreak: false }); y += size + 5; };
-    for (const block of text.replace(/\r/g,"\n").replace(/\t/g," ").split("\n")) { let line = ""; for (const char of block) { if (doc.widthOfString(line + char) > 511 && line) { draw(line); line = ""; } line += char; } draw(line); } y += 6;
+    const clean = safePdfText(doc, text, bold);
+    doc.fontSize(size);
+    const draw = (line: string) => { if (y > 765) { if (++page > 200) throw new OperationalConflictError("Document trop volumineux."); doc.addPage(); y = 42; doc.font(PDF_FONT_BOLD).fontSize(10).text(`AVOIR ${s.number} - suite`, 42,y); y += 28; doc.font(bold ? PDF_FONT_BOLD : PDF_FONT_REGULAR).fontSize(size); } doc.text(line,42,y,{ width: 511,lineBreak: false }); y += size + 5; };
+    for (const block of clean.split("\n")) { let line = ""; for (const char of block) { if (doc.widthOfString(line + char) > 511 && line) { draw(line); line = ""; } line += char; } draw(line); } y += 6;
   };
   try {
+    registerPdfFonts(doc);
     paragraph("FIRST AI", false, 11); paragraph("AVOIR", true, 24); paragraph(s.number,true,14);
     paragraph(`Émission : ${date(s.issueDate)}`);
     paragraph(`Facture originale : ${original.invoice.number} du ${date(original.invoice.issueDate)}`,true);
@@ -52,7 +54,7 @@ export async function generateCreditNotePdf(input: CreditNoteSnapshot): Promise<
     paragraph(`TOTAL HT À DÉDUIRE : ${formatDocumentMoney(s.totals.subtotal)}`,true);
     paragraph(`TVA À DÉDUIRE : ${formatDocumentMoney(s.totals.taxAmount)}`,true);
     paragraph(`TOTAL TTC À DÉDUIRE : ${formatDocumentMoney(s.totals.total)}`,true);
-    const pages = doc.bufferedPageRange(); for (let n = 0; n < pages.count; n++) { doc.switchToPage(n); doc.font("Helvetica").fontSize(8).text(`${s.number} | ${n+1} / ${pages.count}`,42,790,{ lineBreak: false }); }
+    const pages = doc.bufferedPageRange(); for (let n = 0; n < pages.count; n++) { doc.switchToPage(n); doc.font(PDF_FONT_REGULAR).fontSize(8).text(`${s.number} | ${n+1} / ${pages.count}`,42,790,{ lineBreak: false }); }
     doc.end(); return await done;
   } catch (error) { doc.destroy(); throw error; }
 }

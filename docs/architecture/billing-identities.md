@@ -106,7 +106,8 @@ immatriculation/SIREN présents et classification lisible. M1 n’ajoutait pas l
 mentions/dates M3 ; celles-ci sont désormais rendues conditionnellement en v4,
 sans changer les documents historiques.
 Avertissement fiscal maintenu. V1 garde son avertissement d’adresse absente.
-Paiements déclaratifs actuels restent séparés du corps immuable ; WinAnsi inchangé.
+Paiements déclaratifs actuels restent séparés du corps immuable ; [M6](pdf-unicode.md)
+remplace désormais WinAnsi par Noto Sans locales sans réécrire les originaux.
 
 ## Tests et suite
 
@@ -120,5 +121,6 @@ E2E mobile : configuration vendeur/client, séparation site, rejet sans qualific
 émission puis PDF ; anciennes attentes de navigation synchronisées sur route détail.
 
 M2 numérotation/date, M3 dates métier/mentions et [M4 avoirs](credit-notes.md) sont livrés
-séparément ; M5 rétention/audit, M6 Unicode et M7 plateforme restent non implémentés. Réception électronique déjà
+séparément ; M5A/M5B audit/rétention et M6 Unicode sont livrés techniquement,
+sans garanties durables certifiées de production ; M7 plateforme reste non implémenté. Réception électronique déjà
 applicable à qualifier sans attendre ces jalons. Aucun email, paiement bancaire ou IA write.

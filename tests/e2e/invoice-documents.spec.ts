@@ -25,7 +25,7 @@ test("M3 confirmed service date and order reference produce an immutable PDF wit
   await expect(page.getByRole("link", { name: "Télécharger le PDF" })).toHaveCount(0);
   expect((await page.request.get(url)).status()).toBe(409);
   const add = page.getByRole("form", { name: "Ajouter une ligne" });
-  await add.getByLabel("Description").fill("Prestation fictive PDF"); await add.getByLabel("Quantité").fill("1"); await add.getByLabel("Prix unitaire HT (€)").fill("100"); await add.getByLabel("TVA (%)").fill("20"); await add.getByRole("button", { name: "Ajouter la ligne" }).click();
+  await add.getByLabel("Description").fill("Prestation fictive PDF Élodie à Łódź – œ"); await add.getByLabel("Quantité").fill("1"); await add.getByLabel("Prix unitaire HT (€)").fill("100"); await add.getByLabel("TVA (%)").fill("20"); await add.getByRole("button", { name: "Ajouter la ligne" }).click();
   await expect(page.getByRole("region", { name: "Totaux" })).toContainText("120,00 €");
   const classification = page.getByRole("form", { name: "Enregistrer la classification" });
   await classification.getByLabel("Type de transaction").selectOption("B2B"); await classification.getByLabel("Nature des opérations").selectOption("services"); await classification.getByLabel("Territorialité fiscale").selectOption("domestic"); await classification.getByLabel("Traitement TVA de la facture").selectOption("normal"); await classification.getByRole("button", { name: "Enregistrer la classification" }).click();

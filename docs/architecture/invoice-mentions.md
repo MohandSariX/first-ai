@@ -67,7 +67,7 @@ adresse de livraison différente rendue pour biens/mixte.
 V4 ajoute dates/référence, unité/brut/remise/type par ligne, raison TVA et conditions
 de règlement effectivement applicables. V1/v2/v3 restent lisibles sans backfill.
 Le profil vendeur/client modifiable ultérieurement n’altère aucun snapshot émis.
-PDFKit à la demande, polices WinAnsi inchangées ; encart paiement actuel déclaratif
+PDFKit, polices Unicode locales depuis [M6](pdf-unicode.md) ; encart paiement actuel déclaratif
 distinct du corps immuable. Warning fiscal conservé. Ni IA ni transport électronique.
 Formulaire vendeur séparé des identités ; bloc dates/commande dans le brouillon,
 champs de livraison/lieu affichés selon classification ; champs ligne unité/remise/frais.
@@ -82,7 +82,8 @@ RBAC/RLS, anonymes et membership inactif. E2E : date/commande puis émission et 
 
 Hors portée : acomptes/prestations futures, fiscalité internationale et exceptions
 sectorielles, clauses B2G exhaustives, garanties particulières B2C, rectificatifs
-hors avoirs réductifs [M4](credit-notes.md), M5B archivage/rétention, M6 Unicode et M7 plateforme/e-reporting. La seule présence de
+hors avoirs réductifs [M4](credit-notes.md), archivage/rétention durables de production
+au-delà de M5B et M7 plateforme/e-reporting. M6 Unicode est livré techniquement. La seule présence de
 mentions ne permet pas de déclarer First AI fiscalement conforme.
 
 Références officielles vérifiées le 2026-10-06 :

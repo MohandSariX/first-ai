@@ -45,8 +45,10 @@ un trigger différé impose la présence de l’original au commit. Les guards v
 document/tenant/numéro/date/politique et événement d’émission corrélé dans la même
 transaction : pas d’original historique fabriqué après coup. Échec stockage/PDF
 → rollback de l’émission, du compteur fiscal et des événements de succès.
-Le renderer WinAnsi existant peut refuser des caractères non supportés : l’émission
-est alors refusée sans numéro consommé. Unicode reste M6, sans remplacement silencieux.
+Le renderer [Unicode M6](pdf-unicode.md) utilise Noto Sans locale embarquée ; un
+glyphe hors couverture refuse l’émission sans numéro consommé ni remplacement silencieux.
+Version nouvelle : `pdfkit-0.20.2/first-ai-original-v2-noto`. Les originaux précédents
+conservent leurs bytes/version/hash, aucun backfill ni réécriture.
 
 Le fichier doit être publié avant le commit DB : pas de transaction distribuée
 DB/filesystem. Un rollback après publication peut laisser un fichier orphelin
@@ -126,6 +128,6 @@ UUID/révocation. Stockage test en répertoires temporaires isolés nettoyés ; 
 DB privilégié local et fixture-scopé seulement, aucune exception runtime.
 
 Migration additive `0021_silly_deadpool.sql`, anciennes migrations inchangées.
-M6 Unicode, M7 transport électronique, archivage durable/backup/restore réel,
+M6 Unicode livré sans migration ; M7 transport électronique, archivage durable/backup/restore réel,
 contrôle administratif et qualification fiscale restent des chantiers distincts.
 First AI n’est pas déclaré globalement conforme.

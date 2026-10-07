@@ -281,12 +281,15 @@ journal financier ciblé M5A disponible, couverture à partir de son déploiemen
   Flux internationaux/autres/mixte de traitements TVA par ligne non pris en charge
   à l’émission ; adaptations B2C (opposition adresse) et cas particuliers à cadrer.
   Factures historiques sans snapshot non téléchargeables, sans backfill inventé.
-  Polices PDF WinAnsi/français ; glyphes non supportés refusés explicitement.
+  PDF Unicode M6 : Noto Sans Regular/Bold locales embarquées (OFL 1.1), français/
+  Latin Extended/ponctuation testés ; pas de couverture universelle, glyphes absents
+  refusés explicitement. Renderer `pdfkit-0.20.2/first-ai-original-v2-noto` pour les
+  nouveaux originaux ; bytes/hashes/versions antérieurs inchangés, legacy reconstitué distinct.
   Snapshot/corps/lignes/suppressions protégés SQL, journal financier atomique M5A ;
   pas de WORM ni audit fiscal complet contre administration propriétaire.
   Export financier borné livré ; pas d’email/export comptable ou Billing Agent ; avoirs réductifs seulement, rectificatifs
   de remplacement/majoration et cardinalité de facturation partielle à cadrer.
-  Audit fiscal français documentaire terminé au 2026-10-05 ; M1–M4/M5A/M5B implémentés,
+  Audit fiscal français documentaire terminé au 2026-10-05 ; M1–M4/M5A/M5B/M6 implémentés,
   conformité non établie. Numéro/date à l’émission protégés dans le workflow serveur,
   mais historique non renuméroté et séries/émetteurs à qualifier. Acomptes, exceptions
   sectorielles/internationales, clauses publiques et cas particuliers non couverts ;
@@ -318,8 +321,10 @@ approbation mobile et brouillon → émission → encaissement partiel/complet/c
 `pnpm test:e2e` utilisent des fixtures fictives/cleanup et refusent les URLs non locales.
 `pnpm test:ollama` est opt-in/local ; aucun script `test:openai` n'existe.
 Scripts aussi présents : `lint`, `typecheck`, `build`, `db:generate/migrate/studio`,
-`supabase:start/stop/status`. Validation M5B au 2026-10-07 : lint, typecheck,
-219 tests unitaires, 96 intégrations locales, build et 8 E2E passent.
+`supabase:start/stop/status`. Validation M6 au 2026-10-08 : lint, typecheck,
+221 tests unitaires, 97 intégrations locales, build et 8 E2E passent.
+Logs non bloquants : cache webpack des fontes embarquées volumineux, NO_COLOR/
+FORCE_COLOR et fermeture anticipée d’un flux Next dev pendant navigation E2E.
 Migration 0021 appliquée localement avec second passage sûr via tracking ;
 0000–0020 inchangées. Tests M1–M4 conservés ; M4 couvre TVA cumulative/multi-taux,
 paiements/crédit/dette, sur-correction concurrente, émission/retry/rollback du compteur,
@@ -332,17 +337,23 @@ M5A couvre refus SQL, append-only, ressources tenant/UUID, acteurs frais,
 rollback des vrais événements/mutations, solde différé et notes administratives.
 Cleanup financier dans les tests uniquement : URLs locales + tenant fictif possédé
 vérifiés, session propriétaire isolée, aucune exception runtime installée.
-Aucun provider IA exécuté pour M5B.
+Aucun provider IA exécuté pour M6 ; aucune migration ni dépendance npm ajoutée.
+Tests M6 : texte réel décodé via ToUnicode, noms fictifs Élodie/Łukasz/Žák/Ștefan,
+œ/ponctuation/euro, refus CJK/emoji, pagination et répétabilité. Émission locale
+facture/avoir avec version/hash et retry sans régénération après modification CRM.
+QA indépendante PyMuPDF : Unicode et pages facture/avoir visuellement vérifiés,
+correction de la boîte du pied pour éviter une page vide avec les nouvelles métriques.
 PDF original réellement rendu et vérifié visuellement : numéro/date/TVA multi-taux/
 total intacts, aucun encart dynamique. Contrôle d’origine HTTP existant réutilisé.
 Smoke Pricing Ollama (qwen3:4b-instruct) : lecture/calcul déterministe réussi ;
 la suite live optionnelle du jalon précédent a un échec sur son ancien smoke CRM
 (timeout local 35 s) ; elle n’a pas été réexécutée pour la facturation.
 Les limites restent inchangées ; cloud mocké seulement, aucune validation production.
-Prochain jalon technique : **M6, PDF Unicode**, sans prétendre résoudre les garanties
-de stockage/backup/restore de production restantes.
+Prochain jalon technique : **M7, qualification puis intégration électronique dédiée**,
+selon applicabilité, sans prétendre résoudre les garanties de stockage/backup/restore
+de production restantes. [PDF Unicode M6](../docs/architecture/pdf-unicode.md) livré.
 Qualification M0 de l’émetteur/flux et obligations déjà applicables reste nécessaire ;
-M1–M4 ne la réalisent pas automatiquement. Rectificatifs complémentaires, rétention/Unicode
+M1–M4/M5A/M5B/M6 ne la réalisent pas automatiquement. Rectificatifs complémentaires, rétention durable
 et intégration électronique restent des jalons distincts, selon priorité applicable.
 Le plan détaillé est dans l’audit ; aucun connecteur électronique n’est livré.
 Voir [ROADMAP](ROADMAP.md), [TASKS](TASKS.md) et [DECISIONS](DECISIONS.md).

@@ -449,6 +449,12 @@ restent à qualifier. La matrice historique n’est pas réécrite comme attesta
 
 ### M6 — PDF Unicode
 
+**Statut technique : implémenté le 2026-10-08**, facture/avoir Noto Sans locales
+Regular/Bold sous OFL 1.1, couverture Latin Extended testée et refus explicite hors
+couverture. Renderer versionné, anciens originaux inchangés ; aucune couverture
+Unicode universelle ni conformité fiscale globale prétendue. Voir [architecture M6](../architecture/pdf-unicode.md).
+La matrice historique reste celle de l’audit initial, non une attestation de conformité.
+
 - Fontes locales embarquées avec couverture/licence, fallback contrôlé, pagination
   et tests accents/identités internationales ; peut être avancé si M1 révèle ce besoin.
 - Aucun remplacement silencieux de noms ; artefact original/version de rendu conservés.

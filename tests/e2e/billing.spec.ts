@@ -10,7 +10,7 @@ test("M1 billing configuration and explicit invoice classification are usable on
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/settings/billing");
   const seller = page.getByRole("form", { name: "Configurer le vendeur" });
-  await expect(seller.getByLabel("Identité légale du vendeur")).toHaveValue("Vendeur Fictif E2E");
+  await expect(seller.getByLabel("Identité légale du vendeur")).toHaveValue("Vendeur Fictif Élodie — Œuvre");
   await seller.getByRole("button", { name: "Enregistrer l’identité vendeur" }).click();
   await expect(seller.getByRole("status")).toHaveText("Modification enregistrée.");
   await page.goto("/customers"); await page.getByRole("link", { name: new RegExp(e2eFixture.operationalCustomerName) }).click();

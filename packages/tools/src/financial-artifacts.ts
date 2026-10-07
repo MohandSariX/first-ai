@@ -4,7 +4,7 @@ import { generateInvoicePdf } from "./invoice-pdf.js";
 import { generateCreditNotePdf } from "./credit-note-pdf.js";
 import { LocalFinancialStorage, financialHash, financialStorageKey, type FinancialArtifactStorage } from "./financial-storage.js";
 import { OperationalConflictError } from "./operational-policies.js";
-export const FINANCIAL_RENDERER_VERSION = "pdfkit-0.20.2/first-ai-original-v1";
+export const FINANCIAL_RENDERER_VERSION = "pdfkit-0.20.2/first-ai-original-v2-noto";
 export async function persistIssuedArtifact(s: InvoiceSession, snapshot: InvoiceDocumentSnapshot | CreditNoteSnapshot, storage: FinancialArtifactStorage = new LocalFinancialStorage()) {
   const invoice = "invoiceId" in snapshot, kind = invoice ? "invoice" : "credit_note", id = invoice ? snapshot.invoiceId : snapshot.creditNoteId;
   const number = invoice ? snapshot.invoice.number : snapshot.number, issueDate = invoice ? snapshot.invoice.issueDate : snapshot.issueDate;
